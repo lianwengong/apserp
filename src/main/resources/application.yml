@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  shutdown: graceful
+
+spring:
+  application:
+    name: apserp
+  datasource:
+    url: jdbc:sqlserver://localhost:1433;databaseName=APSErpV3;encrypt=false;trustServerCertificate=true
+    username: ${DB_USER:apserp_dev}
+    password: ${DB_PASSWORD:Apserp#2026Dev}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
+      pool-name: apserp-pool
+  flyway:
+    enabled: true
+    # 生产/既有库：首次接入时以 V18 为基线，之后只执行 V19+
+    baseline-on-migrate: true
+    baseline-version: 18
+    baseline-description: 既有库手工建库基线
+    locations: classpath:db/migration
+    sql-migration-prefix: V
+    sql-migration-separator: __
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  health:
+    redis:
+      enabled: false   # 一期未使用 Redis，先关闭健康检查
+    db:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.apserp: DEBUG
+    org.springframework.jdbc.core: INFO

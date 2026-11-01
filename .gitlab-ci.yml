@@ -1,0 +1,41 @@
+stages:
+  - build
+  - test
+  - quality
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  CI: "true"
+
+cache:
+  paths:
+    - .m2/repository
+
+build:
+  stage: build
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - mvn -B -q compile
+
+test:
+  stage: test
+  image: maven:3.9-eclipse-temurin-21
+  services:
+    - name: mcr.microsoft.com/mssql/server:2022-latest
+      alias: mssql
+  variables:
+    ACCEPT_EULA: "Y"
+    MSSQL_SA_PASSWORD: "ChangeMe123!"
+  script:
+    - mvn -B verify
+  artifacts:
+    when: always
+    reports:
+      junit: target/surefire-reports/*.xml
+
+quality:
+  stage: quality
+  image: maven:3.9-eclipse-temurin-21
+  script:
+    - mvn -B test -Dtest=ArchitectureTest  # 架构守护必须通过
+  allow_failure: false

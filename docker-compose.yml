@@ -1,0 +1,21 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: apserp-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "ChangeMe123!"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+
+  redis:
+    image: redis:7-alpine
+    container_name: apserp-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  mssql-data:
