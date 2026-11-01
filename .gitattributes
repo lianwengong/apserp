@@ -1,0 +1,18 @@
+# 行尾统一：脚本与配置一律 LF，避免 Linux Runner 上 .gitlab-ci.yml / *.sh 因 CRLF 报错
+* text=auto eol=lf
+
+*.sh        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.sql       text eol=lf
+Dockerfile  text eol=lf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# 二进制
+*.png   binary
+*.jpg   binary
+*.jar   binary
+*.docx  binary
+*.xlsx  binary
