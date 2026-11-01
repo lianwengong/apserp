@@ -1,6 +1,7 @@
 package com.apserp.plat.meta;
 
 import com.apserp.common.ApiResult;
+import com.apserp.common.security.RequiresPermission;
 import java.util.List;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -53,16 +54,19 @@ public class MetaController {
     }
 
     @GetMapping("/objects/{code}/fields")
+    @RequiresPermission(value = "DATA:{code}", action = "read")
     public ApiResult<List<MetaDefinitionService.FieldDto>> fields(@PathVariable String code) {
         return ApiResult.ok(definitionService.listFields(code));
     }
 
     @GetMapping("/objects/{code}/views")
+    @RequiresPermission(value = "DATA:{code}", action = "read")
     public ApiResult<List<MetaDefinitionService.ListViewDto>> views(@PathVariable String code) {
         return ApiResult.ok(definitionService.listViews(code));
     }
 
     @GetMapping("/objects/{code}/forms")
+    @RequiresPermission(value = "DATA:{code}", action = "read")
     public ApiResult<List<MetaDefinitionService.FormLayoutDto>> forms(@PathVariable String code) {
         return ApiResult.ok(definitionService.listFormLayouts(code));
     }
@@ -70,6 +74,7 @@ public class MetaController {
     // ------------------------------------------------------------ 数据
 
     @GetMapping("/{objectCode}")
+    @RequiresPermission(value = "DATA:{objectCode}", action = "read")
     public ApiResult<MetaQueryService.PageResult> list(
             @PathVariable String objectCode,
             @RequestParam(required = false) String filters,
@@ -80,6 +85,7 @@ public class MetaController {
     }
 
     @PostMapping("/{objectCode}")
+    @RequiresPermission(value = "DATA:{objectCode}", action = "write")
     public ApiResult<Map<String, Long>> save(@PathVariable String objectCode,
                                              @RequestBody String json) {
         long id = saveService.save(objectCode, json);

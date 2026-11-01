@@ -3,6 +3,8 @@ package com.apserp.plat.meta;
 import com.apserp.common.ApiException;
 import com.apserp.common.ErrorCode;
 import com.apserp.common.tenant.TenantContext;
+import com.apserp.plat.perm.PermissionService;
+import java.util.Map;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -19,9 +21,11 @@ import org.springframework.stereotype.Service;
 public class MetaDefinitionService {
 
     private final JdbcTemplate jdbc;
+    private final PermissionService permissionService;
 
-    public MetaDefinitionService(JdbcTemplate jdbc) {
+    public MetaDefinitionService(JdbcTemplate jdbc, PermissionService permissionService) {
         this.jdbc = jdbc;
+        this.permissionService = permissionService;
     }
 
     // ---------------------------------------------------------------- DTO
@@ -96,9 +100,14 @@ public class MetaDefinitionService {
         return hit.get(0);
     }
 
+    /**
+     * 字段定义。**已按字段级权限过滤**：Access=0 的字段不下发，
+     * Access=1 的字段标记为只读（前端渲染时应据此禁用输入）。
+     */
     public List<FieldDto> listFields(String objectCode) {
         DataObjectDto obj = getObject(objectCode);
-        return jdbc.query("""
+        Map<String, Integer> access = permissionService.fieldAccess(objectCode);
+        List<FieldDto> raw = jdbc.query("""
                         SELECT FieldName, DisplayName, DataType, MaxLength, IsNullable, IsPrimaryKey,
                                IsIdentity, IsRequired, LookupType, LookupSource, LookupDisplayField,
                                Format, Sort
@@ -114,6 +123,14 @@ public class MetaDefinitionService {
                         rs.getString("LookupDisplayField"), rs.getString("Format"),
                         rs.getInt("Sort")),
                 obj.id());
+        return raw.stream()
+                .filter(f -> access.getOrDefault(f.fieldName(), 2) > 0)
+                .map(f -> access.getOrDefault(f.fieldName(), 2) == 1
+                        ? new FieldDto(f.fieldName(), f.displayName(), f.dataType(), f.maxLength(),
+                                f.nullable(), f.primaryKey(), f.identity(), f.required(), f.lookupType(),
+                                f.lookupSource(), f.lookupDisplayField(), f.format(), f.sort())
+                        : f)
+                .toList();
     }
 
     public List<ListViewDto> listViews(String objectCode) {

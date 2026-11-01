@@ -37,10 +37,12 @@ public class AuthService {
     private static final String SQL_USER = """
             SELECT u.Id, u.UserName, u.PasswordHash, u.PasswordSalt, u.DisplayName,
                    u.IsEnabled, u.LockedUntil, u.MustChangePwd,
-                   CASE WHEN EXISTS (
+                   -- 注意：RoleType=1 只是"内部角色"（仓管/采购/财务都是 1），
+                   -- 平台管理员必须按角色编码 SYSADMIN 判定，否则所有人都会拿到 adm=true
+                   CASE WHEN u.UserType = 1 AND EXISTS (
                        SELECT 1 FROM plat.UserRole ur
                        JOIN plat.Role r ON r.Id = ur.RoleId
-                       WHERE ur.UserId = u.Id AND r.RoleType = 1 AND r.IsEnabled = 1
+                       WHERE ur.UserId = u.Id AND r.Code = 'SYSADMIN' AND r.IsEnabled = 1
                    ) THEN 1 ELSE 0 END AS IsAdmin
             FROM plat.[User] u
             WHERE u.TenantId = ? AND u.UserName = ? AND u.IsDeleted = 0

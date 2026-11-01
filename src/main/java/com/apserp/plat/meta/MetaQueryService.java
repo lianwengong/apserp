@@ -3,6 +3,7 @@ package com.apserp.plat.meta;
 import com.apserp.common.ApiException;
 import com.apserp.common.ErrorCode;
 import com.apserp.common.tenant.TenantContext;
+import com.apserp.plat.perm.PermissionService;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -38,9 +39,11 @@ public class MetaQueryService {
     private static final int MAX_PAGE_SIZE = 500;
 
     private final JdbcTemplate jdbc;
+    private final PermissionService permissionService;
 
-    public MetaQueryService(JdbcTemplate jdbc) {
+    public MetaQueryService(JdbcTemplate jdbc, PermissionService permissionService) {
         this.jdbc = jdbc;
+        this.permissionService = permissionService;
     }
 
     public PageResult query(String objectCode, String filtersJson, String sort, int page, int size) {
@@ -48,8 +51,9 @@ public class MetaQueryService {
         int safePage = Math.max(page, 1);
         int safeSize = resolvePageSize(size);
         try {
-            return jdbc.execute((ConnectionCallback<PageResult>) con ->
+            PageResult result = jdbc.execute((ConnectionCallback<PageResult>) con ->
                     callList(con, objectCode, filtersJson, sort, safePage, safeSize));
+            return maskFields(objectCode, result);
         } catch (DataAccessException ex) {
             throw translate(objectCode, ex);
         }
@@ -108,6 +112,26 @@ public class MetaQueryService {
     /** 分页大小钳制：1..500，防止一次拉全表拖垮数据库。 */
     static int resolvePageSize(int size) {
         return Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+    }
+
+    /** 字段级权限：Access=0 的列从结果里剔除，避免"看不见但能导出"。 */
+    private PageResult maskFields(String objectCode, PageResult page) {
+        Map<String, Integer> access = permissionService.fieldAccess(objectCode);
+        if (access.isEmpty()) {
+            return page;
+        }
+        List<Map<String, Object>> masked = page.rows().stream()
+                .map(row -> {
+                    Map<String, Object> copy = new LinkedHashMap<>(row);
+                    access.forEach((field, level) -> {
+                        if (level != null && level == 0) {
+                            copy.remove(field);
+                        }
+                    });
+                    return copy;
+                })
+                .toList();
+        return new PageResult(page.page(), page.size(), page.total(), masked);
     }
 
     static void requireValidObjectCode(String objectCode) {

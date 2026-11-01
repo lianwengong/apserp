@@ -16,7 +16,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class MetaQueryServiceTest {
 
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    private final MetaQueryService service = new MetaQueryService(jdbc);
+    private final com.apserp.plat.perm.PermissionService perm = mock(com.apserp.plat.perm.PermissionService.class);
+    private final MetaQueryService service = new MetaQueryService(jdbc, perm);
 
     @Test
     void should_reject_sql_injection_attempt_in_object_code() {
