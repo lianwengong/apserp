@@ -46,6 +46,9 @@ jobs:
           done
           echo "SQL Server not reachable"; exit 1
 
+      - name: 编译（含测试代码）
+        run: mvn -B -ntp -DskipTests test-compile
+
       - name: 创建测试库
         shell: bash
         run: |
@@ -58,9 +61,6 @@ jobs:
             echo "::endgroup::"
             exit 1
           fi
-
-      - name: 编译
-        run: mvn -B -ntp -DskipTests compile
 
       - name: 测试（单测 + 集成测试）
         run: mvn -B -ntp verify -Dit.db=true
