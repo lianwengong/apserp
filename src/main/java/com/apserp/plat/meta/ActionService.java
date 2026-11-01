@@ -97,7 +97,9 @@ public class ActionService {
                     (rs, i) -> mapButton(rs), tenantId);
         } else {
             heads = jdbc.query(sql + """
-                            AND b.FunctionId IN (SELECT Id FROM plat.ModuleFunction WHERE TenantId = ? AND Code = ?)
+                            AND (b.FunctionId IS NULL
+                                 OR b.FunctionId IN (SELECT Id FROM plat.ModuleFunction
+                                                     WHERE TenantId = ? AND Code = ?))
                             ORDER BY b.Sort
                             """,
                     (rs, i) -> mapButton(rs), tenantId, tenantId, objectCode);
@@ -218,7 +220,7 @@ public class ActionService {
                     req.sort(), req.visible() ? 1 : 0, req.visibleExpr(), req.enabledExpr(),
                     req.style(), req.remark(), uid);
             buttonId = jdbc.queryForObject("""
-                    SELECT Id FROM plat.Button WHERE TenantId = ? AND Code = ?
+                    SELECT MAX(Id) FROM plat.Button WHERE TenantId = ? AND Code = ?
                     """, Long.class, tenantId, req.code());
         } else {
             int n = jdbc.update("""

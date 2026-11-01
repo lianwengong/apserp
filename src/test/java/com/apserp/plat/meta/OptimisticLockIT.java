@@ -67,11 +67,11 @@ class OptimisticLockIT {
         long v1 = currentVersion(id);
         // 第一次改：带 v1，成功
         saveService.save("md.brand",
-                "{\"Id\":" + id + ",\"Name\":\"并发测试-A\",\"RowVersion\":" + v1 + "}");
+                "{\"Id\":" + id + ",\"Code\":\"" + CODE + "\",\"Name\":\"并发测试-A\",\"RowVersion\":" + v1 + "}");
 
         // 第二次改：仍用旧版本号 v1（模拟前端没刷新），必须被拒绝
         assertThatThrownBy(() -> saveService.save("md.brand",
-                "{\"Id\":" + id + ",\"Name\":\"并发测试-B\",\"RowVersion\":" + v1 + "}"))
+                "{\"Id\":" + id + ",\"Code\":\"" + CODE + "\",\"Name\":\"并发测试-B\",\"RowVersion\":" + v1 + "}"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("已被他人修改")
                 .extracting(e -> ((ApiException) e).getCode())
@@ -84,7 +84,7 @@ class OptimisticLockIT {
                 "{\"Code\":\"" + CODE + "\",\"Name\":\"并发测试2\",\"Sort\":2}");
         long v = currentVersion(id);
         saveService.save("md.brand",
-                "{\"Id\":" + id + ",\"Name\":\"并发测试2-改\",\"RowVersion\":" + v + "}");
+                "{\"Id\":" + id + ",\"Code\":\"" + CODE + "\",\"Name\":\"并发测试2-改\",\"RowVersion\":" + v + "}");
         var page = queryService.query("md.brand", null, "Id", 1, 100);
         assertThat(page.rows()).anyMatch(r -> "并发测试2-改".equals(r.get("Name"))
                 || "并发测试2-改".equals(String.valueOf(r.get("Name"))));

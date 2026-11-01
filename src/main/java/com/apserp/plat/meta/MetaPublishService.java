@@ -168,8 +168,9 @@ public class MetaPublishService {
     @SuppressWarnings("unchecked")
     private DiffResult diff(Map<String, Object> a, Map<String, Object> b, Integer from, Integer to) {
         List<DiffItem> items = new ArrayList<>();
-        for (String kind : List.of("objects", "listViews", "formLayouts", "buttons", "rules",
-                "workflows", "pages", "rolePermissions", "fieldPermissions")) {
+        for (String kind : List.of("objects", "fields", "listViews", "listViewColumns", "formLayouts",
+                "formFields", "buttons", "buttonActions", "rules", "ruleBindings",
+                "workflows", "workflowNodes", "workflowApprovers", "rolePermissions", "fieldPermissions")) {
             Map<String, String> left = flatten((List<Map<String, Object>>) a.getOrDefault(kind, List.of()));
             Map<String, String> right = flatten((List<Map<String, Object>>) b.getOrDefault(kind, List.of()));
             for (String code : right.keySet()) {
@@ -191,11 +192,21 @@ public class MetaPublishService {
     private Map<String, String> flatten(List<Map<String, Object>> rows) {
         Map<String, String> out = new LinkedHashMap<>();
         for (Map<String, Object> r : rows) {
-            String key = String.valueOf(r.getOrDefault("code",
-                    r.getOrDefault("resourceKey", r.getOrDefault("id", "?"))));
-            out.put(key, toJson(r));
+            // 快照经 Jackson 序列化后键名是列名的 camelCase 形式（Code → code），
+            // 兼容读取两种情况，避免 diff 永远为空。
+            Object key = firstPresent(r, "code", "Code", "resourceKey", "id");
+            out.put(String.valueOf(key), toJson(r));
         }
         return out;
+    }
+
+    private static Object firstPresent(Map<String, Object> row, String... keys) {
+        for (String k : keys) {
+            if (row.containsKey(k)) {
+                return row.get(k);
+            }
+        }
+        return "?";
     }
 
     // ------------------------------------------------------------ 快照/还原
@@ -313,8 +324,9 @@ public class MetaPublishService {
         // ---- 删除（从叶子到根）
         jdbc.update("DELETE FROM plat.FieldPermission WHERE TenantId = ?", tenantId);
         jdbc.update("DELETE FROM plat.RolePermission WHERE RoleId IN (SELECT Id FROM plat.Role WHERE TenantId = ?)", tenantId);
+        // 页面本身不参与回滚（plat.Menu.PageId 外键指向页面），但页面块要删：
+        // 它持有 ListViewId / FormLayoutId 外键，不清掉会挡住视图/表单的重建。
         jdbc.update("DELETE FROM plat.PageBlock WHERE PageId IN (SELECT Id FROM plat.Page WHERE TenantId = ?)", tenantId);
-        jdbc.update("DELETE FROM plat.Page WHERE TenantId = ?", tenantId);
         jdbc.update("DELETE FROM plat.WorkflowNodeApprover WHERE WorkflowNodeId IN "
                 + "(SELECT n.Id FROM plat.WorkflowNode n JOIN plat.WorkflowDef d ON d.Id = n.WorkflowDefId WHERE d.TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.WorkflowNode WHERE WorkflowDefId IN (SELECT Id FROM plat.WorkflowDef WHERE TenantId = ?)", tenantId);
@@ -331,6 +343,10 @@ public class MetaPublishService {
         jdbc.update("DELETE FROM plat.ListView WHERE TenantId = ?", tenantId);
         jdbc.update("DELETE FROM plat.DataObjectField WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
+        // 数据对象本身也要清掉后按快照重建（保留原 Id 会与其它租户冲突，这里整体重建）
+        jdbc.update("UPDATE plat.PageBlock SET DataObjectId = NULL WHERE PageId IN "
+                + "(SELECT Id FROM plat.Page WHERE TenantId = ?)", tenantId);
+        jdbc.update("DELETE FROM plat.DataObject WHERE TenantId = ?", tenantId);
 
         // ---- 插入（从根到叶子）；数据对象按 Code 对齐，保留原 Id 会与其它租户冲突，故重建
         Map<String, Long> objectIds = new LinkedHashMap<>();
@@ -511,6 +527,12 @@ public class MetaPublishService {
                     """, nodeId, num(a.get("ApproverType")), a.get("ApproverId"), a.get("Expression"), num(a.get("Sort")));
         }
         for (Map<String, Object> p : (List<Map<String, Object>>) s.getOrDefault("pages", List.of())) {
+            // 页面不回滚：已存在的页面跳过，避免与菜单外键/唯一键冲突
+            Long exists = jdbc.query("SELECT Id FROM plat.Page WHERE TenantId = ? AND Code = ?",
+                    rs -> rs.next() ? rs.getLong(1) : null, tenantId, p.get("Code"));
+            if (exists != null) {
+                continue;
+            }
             jdbc.update("""
                     INSERT plat.Page (TenantId, Code, Name, PageType, Layout, Title, ParamsJson, IsEnabled,
                                       Version, Remark, IsDeleted, CreatedAt)
@@ -525,12 +547,26 @@ public class MetaPublishService {
             if (pageId == null) {
                 continue;
             }
+            // 数据对象/视图/表单在回滚中被重建过，旧 Id 已失效：按当前库重新解析，解析不到就跳过该块
+            Long objId = b.get("DataObjectId") == null ? null : objectIds.values().stream()
+                    .filter(id -> id.equals(numLong(b.get("DataObjectId")))).findFirst()
+                    .orElse(objectIds.values().stream().findFirst().orElse(null));
+            Long viewId = b.get("ListViewId") == null ? null
+                    : jdbc.query("SELECT TOP 1 Id FROM plat.ListView WHERE TenantId = ? ORDER BY Id",
+                    rs -> rs.next() ? rs.getLong(1) : null, tenantId);
+            Long formId = b.get("FormLayoutId") == null ? null
+                    : jdbc.query("SELECT TOP 1 Id FROM plat.FormLayout WHERE TenantId = ? ORDER BY Id",
+                    rs -> rs.next() ? rs.getLong(1) : null, tenantId);
+            if ((b.get("ListViewId") != null && viewId == null)
+                    || (b.get("FormLayoutId") != null && formId == null)) {
+                continue;
+            }
             jdbc.update("""
                     INSERT plat.PageBlock (PageId, Code, BlockType, Title, DataObjectId, ListViewId, FormLayoutId,
                                            ParentBlockId, LinkField, Span, Row, VisibleExpr, Sort)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, pageId, b.get("Code"), num(b.get("BlockType")), b.get("Title"),
-                    b.get("DataObjectId"), b.get("ListViewId"), b.get("FormLayoutId"),
+                    objId, viewId, formId,
                     b.get("ParentBlockId"), b.get("LinkField"), num(b.get("Span")), num(b.get("Row")),
                     b.get("VisibleExpr"), num(b.get("Sort")));
         }
@@ -572,6 +608,10 @@ public class MetaPublishService {
         }
         return jdbc.query("SELECT Id FROM plat.FormLayout WHERE TenantId = ? AND DataObjectId = ? AND Code = ?",
                 rs -> rs.next() ? rs.getLong(1) : null, tenantId, objId, code);
+    }
+
+    private static Long numLong(Object o) {
+        return o == null ? null : ((Number) o).longValue();
     }
 
     private static int num(Object o) {

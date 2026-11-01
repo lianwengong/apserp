@@ -30,10 +30,15 @@ public class MetaSaveService {
 
     private final JdbcTemplate jdbc;
     private final MetaDefinitionService definitionService;
+    private final RuleService ruleService;
+    private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper =
+            new com.fasterxml.jackson.databind.ObjectMapper();
 
-    public MetaSaveService(JdbcTemplate jdbc, MetaDefinitionService definitionService) {
+    public MetaSaveService(JdbcTemplate jdbc, MetaDefinitionService definitionService,
+                           RuleService ruleService) {
         this.jdbc = jdbc;
         this.definitionService = definitionService;
+        this.ruleService = ruleService;
     }
 
     /**
@@ -51,6 +56,8 @@ public class MetaSaveService {
 
         long tenantId = TenantContext.requireTenantId();
         Long userId = TenantContext.userId();
+        // 规则引擎：保存前校验。违规（Severity=2）直接抛 ApiException，警告级只记日志。
+        ruleService.checkBeforeSave(objectCode, parseData(json));
         assertNotStale(objectCode, json);
         try {
             long id = jdbc.execute((ConnectionCallback<Long>) con -> callSave(con, tenantId, userId, objectCode, json));
@@ -58,6 +65,16 @@ public class MetaSaveService {
             return id;
         } catch (org.springframework.dao.DataAccessException ex) {
             throw translate(objectCode, ex);
+        }
+    }
+
+    /** 把提交的 JSON 转成规则引擎用的扁平 Map（只取顶层字段，子表不参与校验）。 */
+    @SuppressWarnings("unchecked")
+    private java.util.Map<String, Object> parseData(String payload) {
+        try {
+            return jsonMapper.readValue(payload, java.util.Map.class);
+        } catch (Exception e) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "请求体不是合法 JSON：" + e.getMessage());
         }
     }
 
