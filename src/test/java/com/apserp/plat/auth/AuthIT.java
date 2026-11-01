@@ -49,7 +49,7 @@ class AuthIT {
     void prepare() throws Exception {
         try (Connection con = connect(); Statement st = con.createStatement()) {
             st.execute("EXEC sys.sp_set_session_context N'BypassRls', 1");
-            st.executeUpdate("UPDATE plat.[User] SET FailCount = 0, LockedUntil = NULL");
+            st.executeUpdate("UPDATE plat.[User] SET FailCount = 0, LockedUntil = NULL, MustChangePwd = 1 WHERE UserName = 'admin'");
             st.executeUpdate("DELETE FROM plat.UserRole WHERE UserId IN "
                     + "(SELECT Id FROM plat.[User] WHERE UserName = '" + PLAIN_USER + "')");
             st.executeUpdate("DELETE FROM plat.[User] WHERE UserName = '" + PLAIN_USER + "'");

@@ -7,6 +7,7 @@ public final class ErrorCode {
     public static final int NOT_FOUND = 1002;
     public static final int INTERNAL = 1999;
     public static final int DUPLICATE_KEY = 1003;
+    public static final int CONCURRENT_MODIFY = 1004;
 
     public static final int META_OBJECT_NOT_FOUND = 2001;
     public static final int META_FIELD_NOT_ALLOWED = 2002;

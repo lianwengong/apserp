@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
             case ErrorCode.FORBIDDEN, ErrorCode.MUST_CHANGE_PASSWORD -> HttpStatus.FORBIDDEN;
             case ErrorCode.NOT_FOUND, ErrorCode.META_OBJECT_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case ErrorCode.INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
-            case ErrorCode.DUPLICATE_KEY -> HttpStatus.CONFLICT;
+            case ErrorCode.DUPLICATE_KEY, ErrorCode.CONCURRENT_MODIFY -> HttpStatus.CONFLICT;
             default -> HttpStatus.BAD_REQUEST;
         };
         if (status.is5xxServerError()) {
