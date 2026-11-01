@@ -62,6 +62,16 @@ jobs:
             exit 1
           fi
 
+      - name: 重放 Flyway 迁移（建表 + 种子）
+        run: |
+          mvn -B -ntp org.flywaydb:flyway-maven-plugin:10.10.0:migrate \
+            "-Dflyway.url=$IT_DB_URL" \
+            "-Dflyway.user=$IT_DB_USER" \
+            "-Dflyway.password=$IT_DB_PASSWORD" \
+            -Dflyway.locations=filesystem:src/main/resources/db/migration \
+            -Dflyway.baselineOnMigrate=true \
+            -Dflyway.baselineVersion=18
+
       - name: 测试（单测 + 集成测试）
         run: mvn -B -ntp verify -Dit.db=true
 
