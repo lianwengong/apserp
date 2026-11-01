@@ -1,0 +1,61 @@
+# Gitee Go 流水线 —— APSErpV3（后端）
+#
+# 能力边界（实测环境为准）：
+#   - 云端 Maven 插件只提供 JDK 17；项目目标 21，这里用 mvn 参数显式降级到 17（源码无需改动）
+#   - 云端 Node 插件最高 15；Vite 6 需要 Node 18+，前端构建不在本流水线（见 .github/workflows/ci.yml）
+#   - 云端无 SQL Server；集成测试未开启 IT_ENABLED 即自动跳过
+#
+# 触发：push / PR 到 master。
+version: '1.0'
+name: apserp-ci
+displayName: APSERP CI（编译 / 单测 / 架构守护）
+strategy:
+  blocking: true
+  stepTimeout: 30
+
+triggers:
+  push:
+    branches:
+      precise:
+        - master
+  pr:
+    branches:
+      precise:
+        - master
+
+variables:
+  MAVEN_OPTS: -Dfile.encoding=UTF-8
+
+stages:
+  - stage:
+      name: backend
+      displayName: 后端编译与单元测试
+      strategy: fast
+      trigger: auto
+    steps:
+      - step: build@maven
+        name: compile_and_test
+        displayName: 编译 + 单元测试（JDK 17 降级）
+        jdkVersion: 17
+        mavenVersion: 3.6.3
+        commands:
+          - mvn -B -ntp -Djava.version=17 -Dmaven.compiler.release=17 -DskipTests compile
+          - mvn -B -ntp -Djava.version=17 -Dmaven.compiler.release=17 test
+        artifacts:
+          - name: SUREFIRE_REPORTS
+            path:
+              - ./target/surefire-reports
+
+  - stage:
+      name: quality
+      displayName: 架构守护
+      strategy: fast
+      trigger: auto
+    steps:
+      - step: build@maven
+        name: arch
+        displayName: ArchUnit 架构规则
+        jdkVersion: 17
+        mavenVersion: 3.6.3
+        commands:
+          - mvn -B -ntp -Djava.version=17 -Dmaven.compiler.release=17 test -Dtest=ArchitectureTest -DfailIfNoTests=false

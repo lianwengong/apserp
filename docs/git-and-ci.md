@@ -56,16 +56,30 @@ git push -u origin master
 本地 git push  →  平台收到推送  →  按仓库里的 CI 配置文件执行  →  结果出现在网页上（通过/失败）
 ```
 
-本项目的 CI 分四段（`.gitlab-ci.yml`）：
+本项目的 CI 分四段（`.gitlab-ci.yml` / `.github/workflows/ci.yml`）：
 
 | 段 | 做什么 | 依赖 |
 |---|---|---|
 | build | `mvn compile` | 无 |
 | test | `mvn verify`：单测 + 集成测试（真 SQL Server） | 平台需支持 service 容器（GitLab Runner / Docker） |
 | quality | 架构守护 `ArchitectureTest` | 无 |
-| web | `npm ci` + `npm run build` | Node 20 |
+| web | `npm ci` + `npm run build` | Node 18+（Vite 6 要求） |
 
-集成测试的环境变量已在 `.gitlab-ci.yml` 里配好（`IT_ENABLED`、`IT_DB_URL` 等），**不需要你手工建测试库**——流水线里的 `CiDbInit` 会建。
+集成测试的环境变量已在 CI 配置里配好（`IT_ENABLED`、`IT_DB_URL` 等），**不需要手工建测试库**——流水线里的 `CiDbInit` 会建。
+
+### 三个平台能跑到什么程度（已实测）
+
+| 平台 | 配置文件 | 能跑 | 跑不了 |
+|---|---|---|---|
+| 自建 GitLab + Runner | `.gitlab-ci.yml` | 四段全跑（service 容器起 SQL Server） | 无 |
+| GitHub | `.github/workflows/ci.yml` | 四段全跑 | 无 |
+| **Gitee Go（当前）** | `.workflow/MasterPipeline.yml` | 编译、单测、架构守护 | **集成测试**（无 SQL Server）、**前端构建**（云端 Node 最高 15，Vite 6 要 18+） |
+
+Gitee Go 的补偿办法（按推荐顺序）：
+
+1. **代码留在 Gitee，流水线挪到 GitHub**：Gitee 做镜像推送或手动 `git remote add github`，全量四段在 GitHub Actions 跑（免费 2000 分钟/月）。
+2. **给 Gitee Go 挂自建主机**：`shell@agent` 插件把流水线跑在你这台机器上（已装 JDK 21 + SQL Server），可跑全量；代价是机器要在构建时开机。
+3. **只把 Gitee Go 当“编译闸门”**：够了就够，前端与集成测试本地用 `tools/ci-local.ps1` 兜住。
 
 ## 五、不想等平台，先在本地跑一遍 CI
 
@@ -84,6 +98,14 @@ powershell -ExecutionPolicy Bypass -File tools\ci-db-reset.ps1 -Drop
 ```
 
 （需要本机 Windows 账号是 SQL Server 的 sysadmin；脚本只动 `APSErpV3_TEST`，不碰 `APSErpV3`。）
+
+## 六、Gitee Go 开通步骤
+
+1. 打开仓库页 → 顶部 **服务** → **Gitee Go**（或访问 `https://gitee.com/a-shen/apserp/gitee_go`）；
+2. 首次会要求 **绑定手机号**（账号设置里绑）；
+3. 选择「自定义流水线」→ 它会读取仓库里的 `.workflow/MasterPipeline.yml`；
+4. 保存后自动生成一次构建；以后 push 到 master 自动触发；
+5. 免费额度：单仓库 200 分钟 + 账号每月 500 分钟。
 
 ## 六、常见问题
 
