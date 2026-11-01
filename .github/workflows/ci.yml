@@ -47,7 +47,17 @@ jobs:
           echo "SQL Server not reachable"; exit 1
 
       - name: 创建测试库
-        run: mvn -B -ntp -q exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit
+        shell: bash
+        run: |
+          set -o pipefail
+          if mvn -B -ntp exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit 2>&1 | tee ci-db-init.log; then
+            echo "database ready"
+          else
+            echo "::group::CiDbInit 失败详情"
+            grep -n -A 40 "Caused by\|SEVERE\|Exception" ci-db-init.log | head -120 || true
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: 编译
         run: mvn -B -ntp -DskipTests compile
