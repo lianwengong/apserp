@@ -51,7 +51,7 @@ src/test/java/com/apserp/
 ## 3. 编码约定（强制）
 
 - **SQL**：一律参数化；动态 SQL 只能由元数据白名单生成（`plat.DataObjectField`），禁止字符串拼接用户输入。
-- **多租户**：所有查询经 `TenantSession` 执行，自动注入 `TenantId`；业务代码不得自行拼租户条件。
+- **多租户**：上下文由 `TenantAwareDataSource` 在借出连接时注入 `SESSION_CONTEXT`；业务代码直接用 `JdbcTemplate`，**禁止手动设置租户上下文**。查询仍应显式带 `TenantId` 条件（走索引 + 便于排查）。
 - **金额**：`BigDecimal`，禁止 `double`/`float`；比较用 `compareTo`。
 - **时间**：`LocalDate` / `LocalDateTime`，禁止 `java.util.Date`。
 - **主键**：`long`/`Long`，禁止自增语义外推到业务（业务唯一靠 `Code`/`DocNo`）。
