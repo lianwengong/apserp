@@ -1,6 +1,19 @@
 # APSERP（进销存 V3 · 引擎驱动）
 
+[![CI](https://github.com/lianwengong/apserp/actions/workflows/ci.yml/badge.svg)](https://github.com/lianwengong/apserp/actions/workflows/ci.yml)
+
 AI 全量编码模式下的项目骨架。规范见 `AGENTS.md`，架构决策见 `docs/adr/`。
+
+## 仓库与 CI
+
+| 平台 | 地址 | 用途 | 能跑到 |
+|---|---|---|---|
+| GitHub | https://github.com/lianwengong/apserp | **主 CI** | 编译 / 42 个测试（含 SQL Server 集成测试）/ 架构守护 / 前端构建 |
+| Gitee | https://gitee.com/a-shen/apserp | 镜像 + Gitee Go | 编译 / 单测 / 架构守护（云端无 SQL Server、Node 版本低） |
+
+- `git push` 默认推 GitHub（`branch.master.remote=github`）；推 Gitee 用 `git push origin master`。
+- 本地跑同一套四段：`powershell -ExecutionPolicy Bypass -File tools\ci-local.ps1`
+- CI 结构与平台差异见 `docs/git-and-ci.md`；自建主机跑全量见 `docs/ci-gitee-host.md`。
 
 ## 环境要求
 
