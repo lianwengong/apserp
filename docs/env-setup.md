@@ -103,19 +103,39 @@ curl -o /dev/null -w "%{http_code}" http://localhost:8080/api/meta/md.brand
 
 | # | 问题 | 影响 | 处理 |
 |---|---|---|---|
-| 1 | 数据库中有 22 张 `exp.*` 表（租户导出测试残留） | 干扰表数统计 | 建议执行 `DROP SCHEMA`（需人工确认） |
+| 1 | ~~数据库中有 22 张 `exp.*` 表（租户导出测试残留）~~ | ~~干扰表数统计~~ | **已清理（2026-11-01）**，见第 7 节 |
 | 2 | 租户 2 没有元数据，查询报「数据对象不存在」 | 无法验证租户 2 的业务数据隔离 | 需要「租户开通时克隆标准元数据」的能力（第 2 周做） |
 | 3 | Redis 未安装 | 缓存相关功能不可用 | 一期不用；`management.health.redis.enabled=false` |
 | 4 | 前端未初始化 | 无法验证页面渲染 | 第 1 周周四开始 |
 
-## 7. 清理 exp 残留（待人工确认）
+## 7. exp 残留清理（已执行 2026-11-01）
+
+清理前：`exp` 架构 22 张表、6932 行，均为租户 1 导出测试的副本
+（`plat_Module` 636、`plat_Permission` 2070 等与源表一致，可用 `usp_Tenant_Export` 随时重建）。
+
+执行语句（事务内，失败自动回滚）：
 
 ```sql
--- 注意：这是删除操作，属于「红线 5：数据库迁移与不可逆操作」，需人工确认后执行
+SET XACT_ABORT ON;
+BEGIN TRAN;
 DECLARE @sql nvarchar(max) = N'';
-SELECT @sql += N'DROP TABLE [exp].' + QUOTENAME(name) + N';'
+SELECT @sql += N'DROP TABLE [exp].' + QUOTENAME(t.name) + N';'
 FROM sys.tables t JOIN sys.schemas s ON s.schema_id = t.schema_id
 WHERE s.name = 'exp';
-EXEC sp_executesql @sql;
-DROP SCHEMA [exp];
+IF @sql <> N'' EXEC sp_executesql @sql;
+IF SCHEMA_ID('exp') IS NOT NULL EXEC('DROP SCHEMA [exp]');
+COMMIT;
 ```
+
+清理后核对：
+
+| 项 | 清理前 | 清理后 | 期望 |
+|---|---|---|---|
+| 表数 | 248 | **226** | 225 设计表 + 1 Flyway 历史表 |
+| 外键 | 792 | 792 | 不变 |
+| RLS 谓词 | 180 | 180 | 不变 |
+| 架构数 | 13（含 exp） | **12**（11 业务 + dbo） | — |
+| 元数据 | Module 636 / Brand 5 | 636 / 5 | 不变 |
+
+> 注意：`plat.usp_Tenant_Export` 默认导出到 `exp` 架构，**下次执行导出会重新创建它**。
+> 这是设计行为（导出即用即删），不是残留。
