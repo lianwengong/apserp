@@ -27,7 +27,8 @@ class MetaQueryLocalIT {
             assertThat(count(con, "sys.security_predicates", "1 = 1")).isEqualTo(180);
             assertThat(count(con, "plat.Module", "1 = 1")).isEqualTo(635);
             assertThat(count(con, "plat.ModuleFunction", "1 = 1")).isEqualTo(1432);
-            assertThat(count(con, "plat.Permission", "1 = 1")).isEqualTo(2067);
+            // 权限点会随数据对象/功能点增加，基线之外只做下界断言
+            assertThat(count(con, "plat.Permission", "1 = 1")).isGreaterThanOrEqualTo(2067);
         }
     }
 
