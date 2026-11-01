@@ -8,6 +8,7 @@ import {
   Fold,
   Grid,
   HomeFilled,
+  Setting,
   SwitchButton
 } from '@element-plus/icons-vue'
 import type { SchemaGroup } from '../utils/schema'
@@ -165,6 +166,22 @@ function onUserCommand(command: string): void {
 
       <el-scrollbar class="menu-scroll">
         <nav v-if="!collapsed" class="menu">
+          <div class="menu-group">
+            <div class="menu-group-label">
+              <el-icon><Setting /></el-icon>
+              <span>平台</span>
+            </div>
+            <router-link to="/design" class="menu-item" :class="{ active: route.path === '/design' }">
+              <span class="dot" />
+              <span class="item-name">设计器中心</span>
+              <span class="item-code mono">design</span>
+            </router-link>
+            <router-link to="/todo" class="menu-item" :class="{ active: route.path === '/todo' }">
+              <span class="dot" />
+              <span class="item-name">我的待办</span>
+              <span class="item-code mono">todo</span>
+            </router-link>
+          </div>
           <div v-for="group in groups" :key="group.code" class="menu-group">
             <div class="menu-group-label">
               <el-icon><component :is="group.icon" /></el-icon>

@@ -23,6 +23,8 @@ import { decimalScale, formatCell, formatNumber, isBitField, isDateField } from 
 import { groupOf } from '../utils/schema'
 import CellValue from '../components/CellValue.vue'
 import MetaFormDialog from '../components/MetaFormDialog.vue'
+import ActionBar from '../components/ActionBar.vue'
+import ApprovalPanel from '../components/ApprovalPanel.vue'
 
 type ViewState = 'loading' | 'ready' | 'denied' | 'missing' | 'error'
 
@@ -43,6 +45,8 @@ const route = useRoute()
 const router = useRouter()
 
 const code = computed(() => (typeof route.params.code === 'string' ? route.params.code : ''))
+/** 数据对象编码：模板里多处引用（元数据接口、按钮与审批组件的入参）。 */
+const objectCode = computed(() => code.value)
 
 const viewState = ref<ViewState>('loading')
 const errorText = ref('')
@@ -479,6 +483,26 @@ function openEdit(row: Row): void {
   dialogVisible.value = true
 }
 
+/** 审批抽屉：行内“审批”按钮打开，展示该单据的全部流程实例与时间轴。 */
+const approvalVisible = ref(false)
+const approvalBusinessId = ref<number | null>(null)
+
+function openApproval(row: Row): void {
+  const id = Number(row['Id']) || 0
+  if (!id) {
+    ElMessage.warning('缺少主键，无法查看审批')
+    return
+  }
+  approvalBusinessId.value = id
+  approvalVisible.value = true
+}
+
+function onSubmitted(instanceId: number): void {
+  void instanceId
+  approvalVisible.value = false
+  void load()
+}
+
 function onSaved(): void {
   dialogVisible.value = false
   void load()
@@ -707,9 +731,16 @@ function retry(): void {
             </template>
           </el-table-column>
 
-          <el-table-column v-if="canWrite" label="操作" width="80" fixed="right" align="center">
+          <el-table-column label="操作" width="220" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
+              <ActionBar
+                :object-code="objectCode"
+                :row="row"
+                @open-form="openEdit"
+                @refresh="reload"
+                @submitted="onSubmitted"
+              />
+              <el-button link size="small" @click="openApproval(row)">审批</el-button>
             </template>
           </el-table-column>
 
@@ -748,6 +779,13 @@ function retry(): void {
       :access="access"
       :row="editingRow"
       @saved="onSaved"
+    />
+
+    <ApprovalPanel
+      v-model="approvalVisible"
+      :object-code="objectCode"
+      :business-id="approvalBusinessId"
+      @changed="reload"
     />
   </div>
 </template>

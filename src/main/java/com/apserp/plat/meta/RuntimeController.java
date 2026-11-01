@@ -51,10 +51,17 @@ public class RuntimeController {
 
     // ---------------------------------------------------------------- 按钮
 
+    /**
+     * 当前行可用按钮。对象编码来自查询参数而不是路径变量，不能用
+     * {@code @RequiresPermission("DATA:{objectCode}")}（拦截器解析不到路径变量会 fail-closed 直接 403），
+     * 改为方法内显式校验；按钮自身还会按 {@code FunctionId} 再校验一次。
+     */
     @GetMapping("/buttons")
-    @RequiresPermission(value = "DATA:{objectCode}", action = "read")
     public ApiResult<List<ActionService.ResolvedButton>> buttons(@RequestParam String objectCode,
                                                                  @RequestParam(required = false) Long id) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
         Map<String, Object> row = id == null ? Map.of() : rowOf(objectCode, id);
         return ApiResult.ok(actionService.resolve(objectCode, row));
     }
@@ -62,7 +69,9 @@ public class RuntimeController {
     @SuppressWarnings("unchecked")
     private Map<String, Object> rowOf(String objectCode, long id) {
         // 复用查询引擎，保证与列表看到的是同一份数据（含权限与租户过滤）
-        MetaQueryService.PageResult page = queryService.query(objectCode, "Id=" + id, null, 1, 1);
+        // filters 是 JSON 数组格式：[{"f":"Id","op":"eq","v":"123"}]，与列表页同一套解析
+        String filters = "[{\"f\":\"Id\",\"op\":\"eq\",\"v\":\"" + id + "\"}]";
+        MetaQueryService.PageResult page = queryService.query(objectCode, filters, null, 1, 1);
         if (page.rows() == null || page.rows().isEmpty()) {
             return Map.of();
         }
@@ -75,8 +84,10 @@ public class RuntimeController {
     }
 
     @PostMapping("/workflow/submit")
-    @RequiresPermission(value = "DATA:{objectCode}", action = "write")
     public ApiResult<Map<String, Long>> submit(@RequestBody SubmitBody body) {
+        if (!permissionService.check("DATA:" + body.objectCode(), "write")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的写入权限：" + body.objectCode());
+        }
         long instanceId = approvalService.submit(body.objectCode(), body.businessId(),
                 body.businessNo(), body.title());
         return ApiResult.ok(Map.of("instanceId", instanceId));
@@ -134,9 +145,11 @@ public class RuntimeController {
     }
 
     @GetMapping("/workflow/instances")
-    @RequiresPermission(value = "DATA:{objectCode}", action = "read")
     public ApiResult<List<ApprovalService.InstanceDto>> instances(@RequestParam String objectCode,
                                                                  @RequestParam long businessId) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
         return ApiResult.ok(approvalService.instancesOf(objectCode, businessId));
     }
 
