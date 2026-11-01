@@ -1,0 +1,89 @@
+# GitHub Actions —— 与 .gitlab-ci.yml 等价的四段流水线
+# 适用：仓库托管在 GitHub（用 Gitee 或自建 GitLab 时本文件不生效，可删）
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  build-test:
+    name: 编译 / 测试 / 架构守护
+    runs-on: ubuntu-latest
+    services:
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: "Y"
+          MSSQL_SA_PASSWORD: "Apserp#2026Ci"
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Apserp#2026Ci' -C -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      IT_ENABLED: "true"
+      IT_DB_URL: "jdbc:sqlserver://localhost:1433;databaseName=APSErpV3_TEST;encrypt=false;trustServerCertificate=true"
+      IT_DB_USER: "sa"
+      IT_DB_PASSWORD: "Apserp#2026Ci"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: 等待 SQL Server
+        run: |
+          for i in $(seq 1 60); do
+            if (exec 3<>/dev/tcp/127.0.0.1/1433) 2>/dev/null; then echo "up"; exit 0; fi
+            sleep 2
+          done
+          echo "SQL Server not reachable"; exit 1
+
+      - name: 创建测试库
+        run: mvn -B -ntp -q exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit
+
+      - name: 编译
+        run: mvn -B -ntp -DskipTests compile
+
+      - name: 测试（单测 + 集成测试）
+        run: mvn -B -ntp verify -Dit.db=true
+
+      - name: 架构守护
+        run: mvn -B -ntp test -Dtest=ArchitectureTest -DfailIfNoTests=false
+
+      - name: 上传测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 7
+
+  web:
+    name: 前端构建
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: 上传前端产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+          retention-days: 7
