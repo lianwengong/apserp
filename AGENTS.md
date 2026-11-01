@@ -82,6 +82,9 @@ src/test/java/com/apserp/
 | 日期 | 坑 | 结论 |
 |---|---|---|
 | 2026-10-30 | `SESSION_CONTEXT` 与连接池：请求 A 设了租户上下文，请求 B 复用同一物理连接会串租户 | 统一经 `TenantSession.execute()`，在同一条连接上先设上下文再执行 SQL |
+| 2026-11-01 | PowerShell 5.1 的 `Set-Content -Encoding UTF8` 会写 BOM，javac 报「非法字符」 | 一律用 Python 或 `UTF8Encoding($false)` 写文件；提交前检查 BOM |
+| 2026-11-01 | Flyway 按「连接用户默认 schema」判断库是否为空；`apserp_dev` 默认 `dbo`，表都在业务 schema 下，被误判为空库并从 V1 重跑 | 既有库首次接入必须显式 `flyway:baseline -Dflyway.baselineVersion=18`；`baseline-on-migrate` 只适用于新库 |
+| 2026-11-01 | 引入 `spring-boot-starter-data-redis` 但本机未装 Redis，Actuator health 直接 DOWN | 未使用的中间件先关健康检查：`management.health.redis.enabled=false` |
 
 ## 7. 术语表
 
