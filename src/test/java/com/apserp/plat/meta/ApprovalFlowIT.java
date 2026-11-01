@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.apserp.support.ItSupport;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -26,7 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 @EnabledIfSystemProperty(named = "it.db", matches = "true")
-class ApprovalFlowIT {
+class ApprovalFlowIT extends ItSupport {
 
     @Autowired
     ApprovalService approvalService;
@@ -39,7 +40,18 @@ class ApprovalFlowIT {
     @BeforeEach
     void setUp() {
         TenantContext.set(1L, 1L);
+        // 顺序很重要：先删实例（外键指向流程定义），再删定义，避免外键冲突
         cleanUp();
+        // submit_without_flow 会下线演示流程；复位，避免影响后续用例。
+        // 演示流程与 IT 流程作用于同一对象，且都是 IsDefault=1：先把演示流程设为非默认，
+        // 保证本用例提交时命中的是 IT-WF-DEMO（否则会随机命中演示流程）。
+        jdbc.update("UPDATE plat.WorkflowDef SET Status = 1, IsDefault = 0 WHERE Code = 'WF-BRAND-ENABLE'");
+        jdbc.update("DELETE a FROM plat.WorkflowNodeApprover a "
+                + "JOIN plat.WorkflowNode n ON n.Id = a.WorkflowNodeId "
+                + "JOIN plat.WorkflowDef d ON d.Id = n.WorkflowDefId WHERE d.Code LIKE 'IT-WF-%'");
+        jdbc.update("DELETE n FROM plat.WorkflowNode n JOIN plat.WorkflowDef d ON d.Id = n.WorkflowDefId "
+                + "WHERE d.Code LIKE 'IT-WF-%'");
+        jdbc.update("DELETE FROM plat.WorkflowDef WHERE Code LIKE 'IT-WF-%'");
         ensureApprover("it_approver2", "第二审批人");
     }
 
@@ -131,6 +143,18 @@ class ApprovalFlowIT {
         long businessId = newBrand(50);
         long instanceId = approvalService.submit("md.brand", businessId, "IT-WF-002", "品牌审批");
 
+        Integer approverCount = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.WorkflowNodeApprover a
+                JOIN plat.WorkflowNode n ON n.Id = a.WorkflowNodeId
+                JOIN plat.WorkflowDef d ON d.Id = n.WorkflowDefId
+                WHERE d.Code = ? AND n.Code = 'N2'
+                """, Integer.class, WF);
+        System.out.println("[debug] N2 approvers=" + approverCount + " ids=" + jdbc.queryForList("""
+                SELECT a.ApproverId FROM plat.WorkflowNodeApprover a
+                JOIN plat.WorkflowNode n ON n.Id = a.WorkflowNodeId
+                JOIN plat.WorkflowDef d ON d.Id = n.WorkflowDefId
+                WHERE d.Code = ? AND n.Code = 'N2' ORDER BY a.Sort
+                """, Long.class, WF) + " secondUser=" + ensureApprover("it_approver2", "第二审批人"));
         List<ApprovalService.TaskDto> tasks = approvalService.getInstance(instanceId).tasks();
         assertThat(tasks).hasSize(2);
         assertThat(approvalService.getInstance(instanceId).currentNodeCode()).isEqualTo("N2");

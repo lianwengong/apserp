@@ -355,6 +355,7 @@ public class ApprovalService {
         Map<String, Object> ctx = new LinkedHashMap<>(data);
 
         WorkflowDefRow def = pickDef(tenantId, objectCode, ctx);
+
         String snapshot = snapshotJson(def.id());
         jdbc.update("""
                 INSERT plat.WorkflowInstance (TenantId, WorkflowDefId, DefSnapshot, DataObjectCode,
@@ -793,6 +794,7 @@ public class ApprovalService {
     /** 按节点配置生成待办任务；同一节点同一人只生成一条。 */
     private void createTasks(long instanceId, NodeRow node, Long operator) {
         List<Long> approvers = resolveApprovers(node, operator);
+
         if (approvers.isEmpty()) {
             throw new ApiException(ErrorCode.BAD_REQUEST,
                     "审批节点 [" + node.code + "] 未能解析出审批人");
@@ -812,6 +814,7 @@ public class ApprovalService {
                 SELECT ApproverType, ApproverId, Expression FROM plat.WorkflowNodeApprover
                 WHERE WorkflowNodeId = ? ORDER BY Sort, Id
                 """, node.id);
+
         List<Long> out = new ArrayList<>();
         for (Map<String, Object> r : rows) {
             int type = ((Number) r.get("ApproverType")).intValue();

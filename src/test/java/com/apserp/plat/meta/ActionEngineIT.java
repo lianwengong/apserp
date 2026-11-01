@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
+import com.apserp.support.ItSupport;
 import org.springframework.boot.test.context.SpringBootTest;
 
 /**
@@ -22,7 +23,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 @EnabledIfSystemProperty(named = "it.db", matches = "true")
-class ActionEngineIT {
+class ActionEngineIT extends ItSupport {
 
     @Autowired
     ActionService actionService;
