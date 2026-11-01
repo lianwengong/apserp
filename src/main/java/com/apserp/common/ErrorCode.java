@@ -11,6 +11,7 @@ public final class ErrorCode {
     public static final int META_OBJECT_NOT_FOUND = 2001;
     public static final int META_FIELD_NOT_ALLOWED = 2002;
 
+    public static final int UNAUTHORIZED = 3000;
     public static final int TENANT_MISSING = 3001;
     public static final int FORBIDDEN = 3002;
 
