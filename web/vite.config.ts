@@ -16,9 +16,17 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     chunkSizeWarningLimit: 1500,
+    // Windows 下 esbuild 处理超大 chunk 会因临时文件删除失败而中断构建，
+    // 这里改用纯 JS 的 terser 压缩，并把 target 固定为 esnext（浏览器内网环境可控）。
+    target: 'esnext',
+    minify: 'terser',
+    terserOptions: {
+      compress: { passes: 2 },
+      format: { comments: false }
+    },
     rollupOptions: {
       output: {
-        // 拆包：既利于缓存，也避开 esbuild 在 Windows 上处理超大 chunk 的临时文件问题
+        // 拆包：既利于缓存，也减小单文件体积
         manualChunks(id: string): string | undefined {
           if (!id.includes('node_modules')) return undefined
           if (id.includes('element-plus') || id.includes('@element-plus')) return 'element-plus'

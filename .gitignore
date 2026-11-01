@@ -5,3 +5,7 @@ target/
 *.iml
 .vscode/
 .DS_Store
+web/node_modules/
+web/.npm-cache/
+web/dist/
+web/node_modules
