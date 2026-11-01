@@ -95,7 +95,7 @@ const dialogFields = computed<DialogField[]>(() => {
         return {
           fieldName: field.fieldName,
           label: field.label ?? meta?.displayName ?? field.fieldName,
-          controlType: field.controlType,
+          controlType: Number(field.controlType),
           readOnly: field.readOnly,
           required: field.required || meta?.required === true,
           span: field.span
@@ -165,6 +165,9 @@ function resetValues(): void {
       else values[field.fieldName] = raw ?? ''
     } else if (isBitField(meta)) {
       values[field.fieldName] = /^isenabled$/i.test(field.fieldName)
+    } else if (isNumberField(meta) && meta?.nullable === false) {
+      // 数据库列 NOT NULL 但没有默认值时，留空会导致 INSERT 失败，这里给 0
+      values[field.fieldName] = 0
     } else {
       values[field.fieldName] = undefined
     }
@@ -225,9 +228,14 @@ function hasLookupOptions(field: DialogField): boolean {
   return (lookupOptions[field.fieldName]?.length ?? 0) > 0
 }
 
-function lookupPlaceholder(field: DialogField): string {
+/** 查找源对象是否已在当前租户登记（决定渲染下拉还是手工输入）。 */
+function lookupConfigured(field: DialogField): boolean {
   const meta = fieldOf(field.fieldName)
-  return meta?.lookupSource ? `查找：${meta.lookupSource}` : '查找值'
+  return !!meta?.lookupSource && catalog.byCode(meta.lookupSource) !== undefined
+}
+
+function lookupFallbackPlaceholder(field: DialogField): string {
+  return `${field.label} ID（查找对象未配置）`
 }
 
 // ---------------------------------------------------------------- 保存
@@ -249,11 +257,23 @@ async function submit(): Promise<void> {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
+  const isInsert = props.row === null
   const payload: Row = {}
   if (props.row) payload[props.object.primaryKey] = props.row[props.object.primaryKey]
   for (const field of dialogFields.value) {
     if (isDisabled(field)) continue
-    payload[field.fieldName] = normalizeValue(field)
+    const meta = fieldOf(field.fieldName)
+    let value = normalizeValue(field)
+
+    // 新增时不要提交空值：交给数据库默认值，避免把 NOT NULL 列写成 NULL
+    if (isInsert && (value === null || value === '')) continue
+
+    // 修改时把“清空”落到合法值，避免 NOT NULL 约束报 500
+    if (value === null && meta && meta.nullable === false) {
+      if (isNumberField(meta)) value = 0
+      else if (isBitField(meta)) value = false
+    }
+    payload[field.fieldName] = value
   }
 
   saving.value = true
@@ -330,11 +350,27 @@ watch(
           </el-select>
 
           <el-select
-            v-else-if="controlOf(field) === 'lookup'"
+            v-else-if="controlOf(field) === 'lookup' && lookupConfigured(field)"
             v-model="values[field.fieldName]"
             disabled
-            :placeholder="lookupPlaceholder(field)"
+            placeholder="查找对象暂无可选数据"
             class="lookup-missing"
+          />
+
+          <el-input-number
+            v-else-if="controlOf(field) === 'lookup' && isIntegerField(fieldOf(field.fieldName))"
+            v-model="values[field.fieldName]"
+            :disabled="isDisabled(field)"
+            :controls="false"
+            :placeholder="lookupFallbackPlaceholder(field)"
+            style="width: 100%"
+          />
+
+          <el-input
+            v-else-if="controlOf(field) === 'lookup'"
+            v-model="values[field.fieldName]"
+            :disabled="isDisabled(field)"
+            :placeholder="lookupFallbackPlaceholder(field)"
           />
 
           <el-switch

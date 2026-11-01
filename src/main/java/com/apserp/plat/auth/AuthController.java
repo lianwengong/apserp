@@ -22,8 +22,19 @@ public class AuthController {
                                @NotBlank String password) {
     }
 
+    public record ChangePasswordRequest(@NotBlank String tenantCode, @NotBlank String userName,
+                                        @NotBlank String oldPassword, @NotBlank String newPassword) {
+    }
+
     @PostMapping("/login")
     public ApiResult<AuthService.LoginResult> login(@RequestBody LoginRequest req) {
         return ApiResult.ok(authService.login(req.tenantCode(), req.userName(), req.password()));
+    }
+
+    /** 修改口令：首次登录必须调用，成功后换发新令牌。 */
+    @PostMapping("/change-password")
+    public ApiResult<AuthService.LoginResult> changePassword(@RequestBody ChangePasswordRequest req) {
+        return ApiResult.ok(authService.changePassword(req.tenantCode(), req.userName(),
+                req.oldPassword(), req.newPassword()));
     }
 }

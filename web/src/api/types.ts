@@ -82,7 +82,8 @@ export interface ListViewDto {
 export interface FormFieldDto {
   fieldName: string
   label: string | null
-  controlType: number
+  /** 后端 DTO 用 String 承载控件的 tinyint，JSON 里是 "6" 这样的字符串 */
+  controlType: string
   row: number
   col: number
   span: number

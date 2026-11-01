@@ -41,10 +41,16 @@ public class TenantAwareDataSource extends DelegatingDataSource {
     }
 
     private Connection applyTenant(Connection con) throws SQLException {
+        // 关键：每次借出连接都必须先把 BypassRls 复位。
+        // Flyway 迁移脚本会执行 sp_set_session_context 'BypassRls', 1；
+        // 连接归还 Hikari 后再被业务请求借出时，这个标记还在，RLS 会被绕过——
+        // 等于任何一个请求都能读到所有租户的数据。
+        setContext(con, "BypassRls", 0L);
+
         Long tenantId = TenantContext.tenantId();
         Long userId = TenantContext.userId();
         if (tenantId == null) {
-            // 后台任务/运维连接：不设置租户，RLS 会按 fail-closed 返回空集
+            // 后台任务/运维连接：不设置租户，RLS 按 fail-closed 返回空集
             setContext(con, "TenantId", null);
             setContext(con, "UserId", null);
             return con;

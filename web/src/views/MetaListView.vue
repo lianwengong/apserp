@@ -26,6 +26,9 @@ import MetaFormDialog from '../components/MetaFormDialog.vue'
 
 type ViewState = 'loading' | 'ready' | 'denied' | 'missing' | 'error'
 
+/** 没有列表视图时，系统列不进默认列（Id 除外，行标识仍会随数据返回）。 */
+const SYSTEM_COLUMNS = /^(isdeleted|createdby|createdat|modifiedby|modifiedat|deletedby|deletedat|rowversion)$/i
+
 const OPERATORS: { value: FilterOp; label: string }[] = [
   { value: 'like', label: '包含' },
   { value: 'eq', label: '等于' },
@@ -54,6 +57,8 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(50)
 const sort = ref('')
+/** 默认排序来自视图，不算“用户条件”；只有手动点表头才显示排序标签 */
+const sortTouched = ref(false)
 const conditions = ref<FilterCondition[]>([])
 const keyword = ref('')
 const loading = ref(false)
@@ -85,7 +90,7 @@ const columns = computed<ColumnDto[]>(() => {
   const view = activeView.value
   if (view && view.columns.length) return view.columns.filter((column) => column.visible)
   return fields.value
-    .filter((field) => !field.primaryKey)
+    .filter((field) => !field.primaryKey && !SYSTEM_COLUMNS.test(field.fieldName))
     .map<ColumnDto>((field) => ({
       fieldName: field.fieldName,
       title: field.displayName,
@@ -107,6 +112,13 @@ const defaultSort = computed<{ prop: string; order: 'ascending' } | undefined>((
 })
 
 const hasSumColumn = computed(() => displayColumns.value.some((column) => column.sum))
+
+const sortLabel = computed(() =>
+  sort.value
+    .split(',')
+    .map((name) => fieldOfName(name.trim())?.displayName ?? name.trim())
+    .join(' + ')
+)
 
 const searchField = computed<FieldDto | undefined>(() => {
   const candidates = fields.value.filter(
@@ -198,6 +210,7 @@ async function bootstrap(): Promise<void> {
     activeViewCode.value = view?.code ?? ''
     size.value = view && view.pageSize > 0 ? view.pageSize : 50
     sort.value = view?.defaultSort ?? ''
+    sortTouched.value = false
     page.value = 1
     resetVisibility()
     viewState.value = 'ready'
@@ -342,10 +355,12 @@ function onSortChange({ prop, order }: { prop: string; order: 'ascending' | 'des
   if (order === 'descending') {
     // 引擎的排序只接受升序字段列表（DESC 会被忽略），这里直接取消排序并重绘表头
     sort.value = ''
+    sortTouched.value = false
     tableKey.value += 1
     ElMessage.info('当前查询引擎只支持升序排序')
   } else {
     sort.value = order ? prop : ''
+    sortTouched.value = order !== null
   }
   page.value = 1
   void load()
@@ -353,6 +368,7 @@ function onSortChange({ prop, order }: { prop: string; order: 'ascending' | 'des
 
 function clearSort(): void {
   sort.value = ''
+  sortTouched.value = false
   tableKey.value += 1
   page.value = 1
   void load()
@@ -372,8 +388,9 @@ function onSizeChange(next: number): void {
 function switchView(viewCode: string): void {
   const view = views.value.find((item) => item.code === viewCode)
   activeViewCode.value = viewCode
-  if (view && view.pageSize > 0) size.value = view.pageSize
+  size.value = view && view.pageSize > 0 ? view.pageSize : size.value
   sort.value = view?.defaultSort ?? ''
+  sortTouched.value = false
   page.value = 1
   resetVisibility()
   void load()
@@ -586,10 +603,10 @@ function retry(): void {
           </div>
         </div>
 
-        <div v-if="conditions.length || sort" class="chips">
+        <div v-if="conditions.length || (sort && sortTouched)" class="chips">
           <span class="chips-label">已启用</span>
-          <el-tag v-if="sort" closable type="info" effect="plain" @close="clearSort">
-            排序 {{ sort }}
+          <el-tag v-if="sort && sortTouched" closable type="info" effect="plain" @close="clearSort">
+            排序：{{ sortLabel }} ↑
           </el-tag>
           <el-tag
             v-for="condition in conditions"

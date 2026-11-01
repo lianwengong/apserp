@@ -32,6 +32,19 @@ curl -H "X-Tenant-Id: 1" -H "X-User-Id: 1" \
      "http://localhost:8080/api/meta/md.brand?page=1&size=10"
 ```
 
+## 前端（web/）
+
+Vue 3 + TypeScript strict + Vite，页面由元数据驱动（`/object/:code`），不写业务页面代码。
+
+```bash
+cd web
+npm install
+npm run dev        # http://127.0.0.1:5200 ，/api 代理到 127.0.0.1:8080
+npm run build      # 类型检查 + 产物 dist/
+```
+
+演示账号：租户 `T001` / `admin` / `Apserp@2026`。目录、契约、已知限制见 [`web/README.md`](web/README.md)。
+
 ## 目录
 
 ```
@@ -41,6 +54,7 @@ apserp/
   docs/week1/             第一周任务卡
   src/main/java/com/apserp
   src/main/resources/db/migration   Flyway 迁移（S1 已含建库脚本）
+  web/                    前端（Vue 3 + TS strict + Vite）
 ```
 
 ## 已知限制（第一周内解决）

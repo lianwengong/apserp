@@ -14,6 +14,7 @@ public final class ErrorCode {
     public static final int UNAUTHORIZED = 3000;
     public static final int TENANT_MISSING = 3001;
     public static final int FORBIDDEN = 3002;
+    public static final int MUST_CHANGE_PASSWORD = 3004;
 
     private ErrorCode() {
     }

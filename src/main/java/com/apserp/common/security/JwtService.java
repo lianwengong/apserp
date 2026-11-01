@@ -27,6 +27,8 @@ public class JwtService {
     public static final String CLAIM_USER = "uid";
     public static final String CLAIM_NAME = "uname";
     public static final String CLAIM_ADMIN = "adm";
+    /** 首次登录未改密：除改密接口外一律拒绝。 */
+    public static final String CLAIM_MUST_CHANGE = "mpwd";
 
     private final SecretKey key;
     private final Duration ttl;
@@ -42,7 +44,8 @@ public class JwtService {
         this.ttl = Duration.ofMinutes(ttlMinutes);
     }
 
-    public String issue(long userId, int tenantId, String userName, boolean platformAdmin) {
+    public String issue(long userId, int tenantId, String userName, boolean platformAdmin,
+                        boolean mustChangePassword) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(Long.toString(userId))
@@ -50,7 +53,8 @@ public class JwtService {
                         CLAIM_TENANT, tenantId,
                         CLAIM_USER, userId,
                         CLAIM_NAME, userName,
-                        CLAIM_ADMIN, platformAdmin))
+                        CLAIM_ADMIN, platformAdmin,
+                        CLAIM_MUST_CHANGE, mustChangePassword))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key)

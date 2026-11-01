@@ -20,7 +20,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResult<Void>> handleApi(ApiException ex) {
         HttpStatus status = switch (ex.getCode()) {
             case ErrorCode.UNAUTHORIZED, ErrorCode.TENANT_MISSING -> HttpStatus.UNAUTHORIZED;
-            case ErrorCode.FORBIDDEN -> HttpStatus.FORBIDDEN;
+            case ErrorCode.FORBIDDEN, ErrorCode.MUST_CHANGE_PASSWORD -> HttpStatus.FORBIDDEN;
             case ErrorCode.NOT_FOUND, ErrorCode.META_OBJECT_NOT_FOUND -> HttpStatus.NOT_FOUND;
             case ErrorCode.INTERNAL -> HttpStatus.INTERNAL_SERVER_ERROR;
             case ErrorCode.DUPLICATE_KEY -> HttpStatus.CONFLICT;

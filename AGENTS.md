@@ -87,6 +87,10 @@ src/test/java/com/apserp/
 | 2026-11-01 | 引入 `spring-boot-starter-data-redis` 但本机未装 Redis，Actuator health 直接 DOWN | 未使用的中间件先关健康检查：`management.health.redis.enabled=false` |
 | 2026-11-01 | **写 `tenantSession.execute(con -> jdbcTemplate.query(...))` 完全无效**：`jdbcTemplate` 会从池里另取一条连接，上下文设在了 A 连接、查询跑在 B 连接，RLS 看不到租户 → 查询返回空。这是"能跑通演示、上线必炸"的典型缺陷，单测发现不了（有真库才暴露） | 上下文只在 **DataSource 层**注入：`TenantAwareDataSource` 在每次 `getConnection()` 时设置 `SESSION_CONTEXT`。**业务代码禁止手动设上下文，直接用 `JdbcTemplate` 即可**。`TenantSession` 类已删除 |
 | 2026-11-01 | 把 SQL 异常一律翻译成「数据对象不存在」会掩盖真实故障（锁超时、权限不足都被说成对象不存在） | 只把 `RAISERROR('数据对象不存在')` 翻译成业务错误 `2001`，其余一律 `1999` + 完整堆栈进日志 |
+| 2026-11-01 | 列表引擎只 SELECT `DataObjectField.IsVisible=1` 的列，而种子把主键 `Id` 标成不可见 → 前端拿到的行没有 `Id`，修改被保存引擎当成新增（撞唯一键 409） | 主键是行标识，必须随列表返回：`V26__075_list_primary_key.sql` 把所有主键字段置为可见（列表页仍只显示视图列） |
+| 2026-11-01 | 前端按 Java 字段类型猜 JSON：`FormFieldDto.controlType` 实际是 **String**（`"6"`），`ListViewColumn.align` 也是字符串 | 前端 `src/api/types.ts` 以真实 JSON 为准；复杂控件比较前先 `Number(...)`，不要照着 record 的 `int` 猜 |
+| 2026-11-01 | Windows 下 esbuild 压缩大 chunk 报 `remove C:\...\Temp\esbuild-...: Access is denied`，`vite build` 直接中断（沙箱/杀软占用临时文件） | 前端构建改用 `terser` + `target: esnext`（见 `web/vite.config.ts`）；不要改回 esbuild minify，除非换 Linux 构建机 |
+| 2026-11-01 | Flyway 迁移脚本里的 `sp_set_session_context 'BypassRls', 1` 在连接归还 Hikari 后没有清除；复用该连接的请求会绕过 RLS，读到所有租户的元数据（列表排序时报「列名 'Sort' 不明确」） | **待修**：`TenantAwareDataSource` 每次借出连接时显式把 `BypassRls` 置 0/NULL；或让 Flyway 使用独立连接池 |
 
 ## 7. 术语表
 
@@ -96,3 +100,19 @@ src/test/java/com/apserp/
 | 单据 | 有单号、有状态机、有明细行的业务凭证（订单/入库/出库/调拨…） |
 | 元数据 | 模块、菜单、页面、数据对象、字段、按钮、规则、审批的配置数据 |
 | 引擎 | 按元数据动态生成界面与 CRUD 的运行时 |
+
+## 8. 前端依赖白名单（web/）
+
+> 只在 `web/` 内使用；新增依赖必须在此登记，否则 CI 失败。
+
+| 依赖 | 版本 | 类型 | 用途 |
+|---|---|---|---|
+| vue | ^3.5.13 | runtime | 视图框架 |
+| vue-router | ^4.5.0 | runtime | hash 路由 + 登录守卫 |
+| element-plus | ^2.9.0 | runtime | 组件库（中文 locale） |
+| @element-plus/icons-vue | ^2.3.1 | runtime | 图标 |
+| vite | ^6.0.7 | dev | 开发服务器/构建 |
+| @vitejs/plugin-vue | ^5.2.1 | dev | SFC 编译 |
+| typescript | ~5.7.2 | dev | strict 类型 |
+| vue-tsc | ^2.2.0 | dev | 模板类型检查 |
+| terser | ^5 | dev | 生产压缩（替代 esbuild minify，见踩坑记录） |

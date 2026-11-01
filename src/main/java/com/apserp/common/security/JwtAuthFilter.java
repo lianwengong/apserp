@@ -24,6 +24,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtAuthFilter extends OncePerRequestFilter {
 
+    /** 请求属性：首次登录未改密。 */
+    public static final String ATTR_MUST_CHANGE = "apserp.mustChangePassword";
+
     private final JwtService jwtService;
     private final boolean allowHeaderAuth;
 
@@ -48,7 +51,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             long userId = ((Number) claims.get(JwtService.CLAIM_USER)).longValue();
             int tenantId = ((Number) claims.get(JwtService.CLAIM_TENANT)).intValue();
             boolean admin = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_ADMIN));
+            boolean mustChange = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_MUST_CHANGE));
             TenantContext.set((long) tenantId, userId, admin);
+            request.setAttribute(ATTR_MUST_CHANGE, mustChange);
         } else if (allowHeaderAuth && request.getHeader("X-Tenant-Id") != null) {
             TenantContext.set(Long.valueOf(request.getHeader("X-Tenant-Id")),
                     request.getHeader("X-User-Id") == null

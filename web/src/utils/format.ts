@@ -5,22 +5,30 @@ export function isBlank(value: unknown): boolean {
   return value === null || value === undefined || value === ''
 }
 
+/** 去掉 decimal(18,4) / datetime2(3) 这类精度后缀，只留基础类型名。 */
+function baseType(field?: FieldDto): string {
+  return (field?.dataType ?? '')
+    .replace(/\(.*\)\s*$/, '')
+    .trim()
+    .toLowerCase()
+}
+
 export function isBitField(field?: FieldDto): boolean {
-  return field !== undefined && /^bit$/i.test(field.dataType)
+  return baseType(field) === 'bit'
 }
 
 export function isDateField(field?: FieldDto): boolean {
-  return field !== undefined && /^(date|datetime|datetime2|smalldatetime|time)$/i.test(field.dataType)
+  return ['date', 'datetime', 'datetime2', 'smalldatetime', 'time'].includes(baseType(field))
 }
 
 export function isIntegerField(field?: FieldDto): boolean {
-  return field !== undefined && /^(tinyint|smallint|int|bigint)$/i.test(field.dataType)
+  return ['tinyint', 'smallint', 'int', 'bigint'].includes(baseType(field))
 }
 
 export function isNumberField(field?: FieldDto): boolean {
   return (
     isIntegerField(field) ||
-    (field !== undefined && /^(decimal|numeric|money|smallmoney|float|real)$/i.test(field.dataType))
+    ['decimal', 'numeric', 'money', 'smallmoney', 'float', 'real'].includes(baseType(field))
   )
 }
 

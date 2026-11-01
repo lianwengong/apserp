@@ -54,16 +54,17 @@ class JwtServiceTest {
 
     @Test
     void issued_token_should_carry_claims() {
-        String token = jwt.issue(42L, 7, "admin", true);
+        String token = jwt.issue(42L, 7, "admin", true, false);
         Claims claims = jwt.parse(token);
         assertThat(claims.getSubject()).isEqualTo("42");
         assertThat(((Number) claims.get(JwtService.CLAIM_TENANT)).intValue()).isEqualTo(7);
         assertThat(claims.get(JwtService.CLAIM_ADMIN)).isEqualTo(true);
+        assertThat(claims.get(JwtService.CLAIM_MUST_CHANGE)).isEqualTo(false);
     }
 
     @Test
     void tampered_token_should_be_rejected() {
-        String token = jwt.issue(42L, 7, "admin", false);
+        String token = jwt.issue(42L, 7, "admin", false, false);
         String tampered = token.substring(0, token.length() - 2) + "xx";
         assertThatThrownBy(() -> jwt.parse(tampered)).isInstanceOf(ApiException.class);
     }
@@ -71,7 +72,7 @@ class JwtServiceTest {
     @Test
     void token_signed_with_other_key_should_be_rejected() {
         JwtService other = new JwtService("another-secret-another-secret-32bytes!", 60);
-        String foreign = other.issue(1L, 1, "x", true);
+        String foreign = other.issue(1L, 1, "x", true, false);
         assertThatThrownBy(() -> jwt.parse(foreign)).isInstanceOf(ApiException.class);
     }
 

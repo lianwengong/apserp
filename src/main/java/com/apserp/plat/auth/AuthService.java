@@ -54,6 +54,10 @@ public class AuthService {
             + "THEN DATEADD(MINUTE, ?, sysutcdatetime()) ELSE LockedUntil END "
             + "WHERE Id = ?";
 
+    private static final String SQL_CHANGE_PWD =
+            "UPDATE plat.[User] SET PasswordHash = ?, PasswordSalt = ?, PasswordUpdatedAt = sysutcdatetime(), "
+            + "MustChangePwd = 0, FailCount = 0, LockedUntil = NULL WHERE Id = ?";
+
     private static final String SQL_OK =
             "UPDATE plat.[User] SET FailCount = 0, LockedUntil = NULL, "
             + "LastLoginAt = sysutcdatetime() WHERE Id = ?";
@@ -114,11 +118,48 @@ public class AuthService {
                 throw new ApiException(ErrorCode.UNAUTHORIZED, "租户或账号或口令不正确");
             }
             recordSuccess(user.id());
-            String token = jwtService.issue(user.id(), tenantId, user.userName(), user.admin());
+            String token = jwtService.issue(user.id(), tenantId, user.userName(), user.admin(),
+                    user.mustChange());
             log.info("login_ok tenant={} user={}", tenantId, user.userName());
             return new LoginResult(token, user.id(), tenantId, user.displayName(), user.mustChange());
         } finally {
             TenantContext.clear();
+        }
+    }
+
+    /**
+     * 修改口令（首次登录强制走这里）。
+     *
+     * <p>规则：新旧口令不能相同、长度 8-64、必须同时包含字母与数字。</p>
+     */
+    public LoginResult changePassword(String tenantCode, String userName, String oldPassword,
+                                      String newPassword) {
+        validatePasswordPolicy(newPassword);
+        if (oldPassword != null && oldPassword.equals(newPassword)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "新口令不能与旧口令相同");
+        }
+        LoginResult login = login(tenantCode, userName, oldPassword);
+        TenantContext.set((long) login.tenantId(), login.userId(), false);
+        try {
+            String salt = hasher.newSalt();
+            String hash = hasher.hash(newPassword, salt);
+            jdbc.update(SQL_CHANGE_PWD, hash, salt, login.userId());
+            log.info("password_changed tenant={} user={}", login.tenantId(), userName);
+        } finally {
+            TenantContext.clear();
+        }
+        // 旧令牌仍带 mpwd=true，必须换发
+        return login(tenantCode, userName, newPassword);
+    }
+
+    static void validatePasswordPolicy(String raw) {
+        if (raw == null || raw.length() < 8 || raw.length() > 64) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "口令长度必须为 8-64 位");
+        }
+        boolean hasLetter = raw.chars().anyMatch(Character::isLetter);
+        boolean hasDigit = raw.chars().anyMatch(Character::isDigit);
+        if (!hasLetter || !hasDigit) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "口令必须同时包含字母与数字");
         }
     }
 
