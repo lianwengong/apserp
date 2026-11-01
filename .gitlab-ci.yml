@@ -2,6 +2,7 @@ stages:
   - build
   - test
   - quality
+  - web
 
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
@@ -39,3 +40,20 @@ quality:
   script:
     - mvn -B test -Dtest=ArchitectureTest  # 架构守护必须通过
   allow_failure: false
+web-build:
+  stage: web
+  image: node:20-alpine
+  variables:
+    NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/web/.npm-cache"
+  script:
+    - cd web
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - web/dist/
+    expire_in: 1 week
+  cache:
+    key: web-npm
+    paths:
+      - web/.npm-cache/
