@@ -1,0 +1,41 @@
+# Gitee Go 流水线 —— 自建主机模式（shell@agent）
+#
+# 与 MasterPipeline.yml 的区别：本流水线把任务派到「自建主机组」执行，
+# 那台机器上有 JDK 21 + SQL Server + Node 18+，因此四段都能真跑：
+#   编译 → 单元/集成测试（真库重放 V1..V28）→ 架构守护 → 前端构建
+#
+# 前置：
+#   1. 在 Gitee Go 里新建主机组，装好 agent，记下 hostGroupID（见 docs/ci-gitee-host.md）
+#   2. 把下面的 hostGroupID 改成你的主机组 ID
+#   3. 那台机器的 SQL Server 上要有 apserp_dev 测试账号权限（tools\ci-db-reset.ps1 会处理）
+version: '1.0'
+name: apserp-ci-host
+displayName: APSERP CI（自建主机全量四段）
+strategy:
+  blocking: true
+  stepTimeout: 60
+
+triggers:
+  push:
+    branches:
+      precise:
+        - master
+  pr:
+    branches:
+      precise:
+        - master
+
+stages:
+  - stage:
+      name: full
+      displayName: 编译 / 测试 / 架构守护 / 前端
+      strategy: fast
+      trigger: auto
+    steps:
+      - step: shell@agent
+        name: run_local_ci
+        displayName: 执行本机四段 CI
+        hostGroupID: gitee-go
+        script: |
+          cd %GITEE_WORKSPACE%
+          powershell -ExecutionPolicy Bypass -File tools\ci-local.ps1
