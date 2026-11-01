@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 /**
@@ -17,6 +18,7 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
  * <p>跑在一次性空库（默认 APSErpV3_TEST）上，可以随时重建，不污染开发库。</p>
  */
 @EnabledIfSystemProperty(named = "it.db", matches = "true")
+@EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 class MetaQueryLocalIT {
 
     @Test

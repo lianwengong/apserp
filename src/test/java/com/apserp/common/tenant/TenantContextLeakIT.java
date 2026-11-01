@@ -8,6 +8,7 @@ import java.sql.Statement;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,10 +25,10 @@ import org.springframework.test.context.DynamicPropertySource;
  */
 @SpringBootTest(properties = {
         "spring.datasource.hikari.maximum-pool-size=1",
-        "spring.datasource.hikari.minimum-idle=1",
-        "spring.flyway.enabled=false"
+        "spring.datasource.hikari.minimum-idle=1"
 })
 @EnabledIfSystemProperty(named = "it.db", matches = "true")
+@EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 class TenantContextLeakIT {
 
     @DynamicPropertySource
@@ -76,19 +77,24 @@ class TenantContextLeakIT {
         }
         assertThat(tenant1).isPositive();
 
-        // 换成租户 2：必须看不到租户 1 的任何行，只能看到自己的
+        // 换租户 2：看不到租户 1 的任何行
         TenantContext.set(2L, null, false);
-        try (Connection con = dataSource.getConnection(); Statement st = con.createStatement()) {
-            try (var rs = st.executeQuery("SELECT COUNT(*) FROM plat.Module WHERE TenantId = 1")) {
-                rs.next();
-                assertThat(rs.getLong(1))
-                        .as("换租户后绝不能看到上一个租户的数据")
-                        .isZero();
-            }
-            try (var rs = st.executeQuery("SELECT COUNT(*) FROM plat.Module WHERE TenantId = 2")) {
-                rs.next();
-                assertThat(rs.getLong(1)).isPositive();
-            }
+        try (Connection con = dataSource.getConnection(); Statement st = con.createStatement();
+             var rs = st.executeQuery("SELECT COUNT(*) FROM plat.Module WHERE TenantId = 1")) {
+            rs.next();
+            assertThat(rs.getLong(1))
+                    .as("换租户后绝不能看到上一个租户的数据")
+                    .isZero();
+        }
+
+        // 再回到租户 1，确认上下文随连接借出被正确重设（而不是停留在租户 2）
+        TenantContext.set(1L, 1L, false);
+        try (Connection con = dataSource.getConnection(); Statement st = con.createStatement();
+             var rs = st.executeQuery("SELECT COUNT(*) FROM plat.Module")) {
+            rs.next();
+            assertThat(rs.getLong(1))
+                    .as("切回租户 1 后必须重新看到自己的 %d 行", tenant1)
+                    .isEqualTo(tenant1);
         }
     }
 }

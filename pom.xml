@@ -132,6 +132,12 @@
           </includes>
         </configuration>
       </plugin>
+      <!-- CI：建测试库（mvn exec:java -Dexec.mainClass=com.apserp.support.CiDbInit） -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.3.0</version>
+      </plugin>
     </plugins>
   </build>
 </project>

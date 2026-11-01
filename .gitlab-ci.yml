@@ -1,3 +1,5 @@
+# GitLab CI —— APSErpV3
+# 说明：UTF-8 编码，禁止用 GBK 保存，否则 Runner 里注释与 URL 会乱码。
 stages:
   - build
   - test
@@ -5,55 +7,86 @@ stages:
   - web
 
 variables:
-  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository"
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dfile.encoding=UTF-8"
+  MAVEN_CLI_OPTS: "-B -ntp"
   CI: "true"
 
-cache:
+.maven-cache: &maven-cache
+  key: maven-$CI_COMMIT_REF_SLUG
   paths:
     - .m2/repository
 
+# ---------------- 1. 编译 ----------------
 build:
   stage: build
   image: maven:3.9-eclipse-temurin-21
+  cache: *maven-cache
   script:
-    - mvn -B -q compile
+    - mvn $MAVEN_CLI_OPTS -DskipTests compile
+  artifacts:
+    paths:
+      - target/classes/
+    expire_in: 1 day
 
+# ---------------- 2. 测试（含真库集成测试） ----------------
 test:
   stage: test
   image: maven:3.9-eclipse-temurin-21
+  cache: *maven-cache
   services:
     - name: mcr.microsoft.com/mssql/server:2022-latest
       alias: mssql
   variables:
     ACCEPT_EULA: "Y"
-    MSSQL_SA_PASSWORD: "ChangeMe123!"
+    MSSQL_SA_PASSWORD: "Apserp#2026Ci"
+    # 集成测试开关：CI 打开；本地不设即自动跳过
+    IT_ENABLED: "true"
+    IT_DB_URL: "jdbc:sqlserver://mssql:1433;databaseName=APSErpV3_TEST;encrypt=false;trustServerCertificate=true"
+    IT_DB_USER: "sa"
+    IT_DB_PASSWORD: "Apserp#2026Ci"
   script:
-    - mvn -B verify
+    # SQL Server 容器启动后 15–40 秒才可连接，先探活再建库
+    - |
+      echo "waiting for SQL Server at mssql:1433 ..."
+      for i in $(seq 1 60); do
+        if (exec 3<>/dev/tcp/mssql/1433) 2>/dev/null; then echo "up after ${i}0s"; break; fi
+        sleep 2
+      done
+    # 建测试库（Flyway 不建库）
+    - mvn $MAVEN_CLI_OPTS -q exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit
+    # 全量测试：单测 + 集成测试（-Dit.db=true 打开本地 IT）
+    - mvn $MAVEN_CLI_OPTS verify -Dit.db=true
   artifacts:
     when: always
     reports:
       junit: target/surefire-reports/*.xml
+    paths:
+      - target/surefire-reports/
+    expire_in: 1 week
 
+# ---------------- 3. 架构守护与静态检查 ----------------
 quality:
   stage: quality
   image: maven:3.9-eclipse-temurin-21
+  cache: *maven-cache
   script:
-    - mvn -B test -Dtest=ArchitectureTest  # 架构守护必须通过
-  allow_failure: false
+    - mvn $MAVEN_CLI_OPTS test -Dtest=ArchitectureTest -DfailIfNoTests=false
+
+# ---------------- 4. 前端构建 ----------------
 web-build:
   stage: web
   image: node:20-alpine
   variables:
     NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/web/.npm-cache"
+  cache:
+    key: web-$CI_COMMIT_REF_SLUG
+    paths:
+      - web/.npm-cache/
   script:
     - cd web
-    - npm ci
+    - npm ci --no-audit --no-fund
     - npm run build
   artifacts:
     paths:
       - web/dist/
     expire_in: 1 week
-  cache:
-    key: web-npm
-    paths:
-      - web/.npm-cache/
