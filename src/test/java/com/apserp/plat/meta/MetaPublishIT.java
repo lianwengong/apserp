@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.apserp.common.ApiException;
 import com.apserp.common.tenant.TenantContext;
+import com.apserp.support.ItDb;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -16,17 +17,30 @@ import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 /**
  * 元数据发布/回滚集成测试。
  *
  * <p>回滚是“整体替换”，风险最高，因此每个用例结束都回到发布前的状态：
  * 先发布一版基线，改动后用该版本回滚，断言还原成功。</p>
+ *
+ * <p>这里显式声明 {@code @DynamicPropertySource}（不依赖基类继承）：CI 的上下文缓存下
+ * 曾出现继承来的动态属性未生效，导致默认数据源连 apserp_dev 失败（容器里没有该账号）。</p>
  */
 @SpringBootTest
 @EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 @EnabledIfSystemProperty(named = "it.db", matches = "true")
 class MetaPublishIT {
+
+    @DynamicPropertySource
+    static void datasource(DynamicPropertyRegistry registry) {
+        registry.add("spring.datasource.url", ItDb::url);
+        registry.add("spring.datasource.username", ItDb::user);
+        registry.add("spring.datasource.password", ItDb::password);
+        registry.add("spring.flyway.enabled", () -> "false");
+    }
 
     @Autowired
     MetaPublishService publishService;
