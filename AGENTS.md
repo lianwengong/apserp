@@ -117,6 +117,9 @@ src/test/java/com/apserp/
 | 2026-11-02 | 外观偏好只有 4 套主题 + 字号 + 明暗，「导航模式 / 标签栏形态 / 圆角 / 人民币色系」都缺；且主题色是手写 CSS 变量，加一套要改 9 个变量 | 主题只存「主色 + 名称」，色阶在 `stores/appearance.ts` 里由主色混合推导并写成内联 CSS 变量；导航/标签/圆角/字号全部落 `html[data-*]`，CSS 只认 data 属性 |
 | 2026-11-02 | 梯形书签用 `::before { z-index: -1 }` 做背景，被父容器底色盖住，标签栏看起来完全没变化（截图对比才发现） | 伪元素做背景时 z-index 至少 0，并给子元素 `position: relative; z-index: 1`；样式改动必须截图对比，不能只看 class 是否存在 |
 | 2026-11-02 | Vite dev 报「Failed to resolve import … Does the file exist?」，但 `npm run build` 通过、文件也真实存在 | 这是 dev server 在文件创建瞬间的**陈旧模块状态**，不是代码问题：重启 `npm run dev` 即可。判断标准是 build 是否通过 |
+| 2026-11-02 | 外观偏好只存 localStorage，换机器就回默认；「跟随系统」的明暗也没做 | 新增 `plat.UserPreference` + `/api/preference`：本地优先保证首屏、登录后拉取覆盖、修改 800ms 防抖回写；明暗拆成「选择」(`data-mode-preference`) 与「生效」(`data-mode`) 两个值，auto 用 matchMedia 判定 |
+| 2026-11-02 | 系统深浅切换后页面变了，但抽屉里的「当前系统为暗色/亮色」提示不更新 | 直接把 `matchMedia().matches` 读在模板里不会重绘：必须把它放进 `reactive`（本项目 `systemDark`），在 `change` 事件里更新，模板读响应式值 |
+| 2026-11-02 | 用 PowerShell 批量 `Replace` 改 `appearance.ts`，其中一段没匹配上却没有任何报错，导致「响应式修复」实际没落盘，排查了两轮 | 每次脚本改写后必须 `grep` 关键符号确认（本次 `systemDark` 缺失才发现），或直接用 edit 工具 |
 | 2026-11-02 | PageSchema 只有本地定义，远程编辑要发版；前后端两份定义容易漂移 | 新增 plat.PageSchema + /api/page-schema/{code} + 管理端页面编排（/system/pages）；保存时以表单 code/title/kind 覆盖 JSON，服务端二次校验；前端 30s 缓存、保存主动失效、远程失败回退本地 |
 
 

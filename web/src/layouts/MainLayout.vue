@@ -1,26 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
   Close,
+  Coin,
   Expand,
+  Files,
   Fold,
+  Goods,
   Grid,
   HomeFilled,
+  Money,
+  Present,
   Search,
+  Sell,
   Setting,
-  SwitchButton
+  Shop,
+  ShoppingCart,
+  SwitchButton,
+  Tickets,
+  TrendCharts,
+  Van
 } from '@element-plus/icons-vue'
 import type { SchemaGroup } from '../utils/schema'
 import { SCHEMA_GROUPS, groupOf } from '../utils/schema'
 import type { DataObjectDto } from '../api/types'
 import type { MenuNode } from '../api/menu'
+import type { TreeNavGroup, TreeNavLeaf } from '../components/treeNav'
 import { catalog } from '../stores/catalog'
 import { menus } from '../stores/menu'
 import { session } from '../stores/session'
 import { filterMenuTree, findMenuName } from '../utils/menu'
 import MenuTree from '../components/MenuTree.vue'
+import TreeNavRail from '../components/TreeNavRail.vue'
 import AppearanceDrawer from '../components/AppearanceDrawer.vue'
 import TopNav from '../components/TopNav.vue'
 import { appearance } from '../stores/appearance'
@@ -35,21 +48,12 @@ const router = useRouter()
 // ---------------------------------------------------------------- 外观偏好（导航模式）
 
 const navMode = computed(() => appearance.state.navMode)
-const menuDrawer = ref(false)
 /** 顶部导航用的根节点：平台管理单独放在抽屉里，其余业务菜单横排 */
 const topNodes = computed(() => menus.state.tree.filter((node) => node.code !== '90'))
 
 function openMenuFromTop(node: MenuNode): void {
   openMenu(node)
 }
-
-/** 路由变化后收起弹窗树（含点侧边栏里的普通链接） */
-watch(
-  () => route.fullPath,
-  () => {
-    menuDrawer.value = false
-  }
-)
 
 // ---------------------------------------------------------------- 侧边栏
 
@@ -83,9 +87,104 @@ const businessMenus = computed(() =>
   )
 )
 
+const ROOT_ICONS: Record<string, Component> = {
+  '01': Goods,
+  '02': ShoppingCart,
+  '03': Sell,
+  '04': Shop,
+  '05': Present,
+  '06': Tickets,
+  '07': Coin,
+  '08': Van,
+  '09': Money,
+  '10': TrendCharts
+}
+
+/** 参考系统：把一个域的所有后代拍平成叶子，面板里用面包屑说明归属。 */
+function flattenMenuLeaves(nodes: MenuNode[], crumb: string[] = []): TreeNavLeaf[] {
+  const out: TreeNavLeaf[] = []
+  for (const node of nodes) {
+    if (node.children.length) {
+      out.push(...flattenMenuLeaves(node.children, [...crumb, node.name]))
+      continue
+    }
+    if (!node.route) continue
+    out.push({
+      key: node.code,
+      title: node.name,
+      route: node.route,
+      crumb: crumb.length ? crumb.join(' / ') : undefined,
+      node
+    })
+  }
+  return out
+}
+
+const treeGroups = computed<TreeNavGroup[]>(() => {
+  const groups: TreeNavGroup[] = [
+    {
+      key: 'workbench',
+      title: '工作台',
+      icon: HomeFilled,
+      leaves: [
+        { key: 'home', title: '工作台首页', route: '/' },
+        { key: 'todo', title: '我的待办', route: '/todo' },
+        { key: 'workflow', title: '流程中心', route: '/workflow' }
+      ]
+    }
+  ]
+
+  if (platformRoot.value) {
+    groups.push({
+      key: 'platform',
+      title: platformRoot.value.name,
+      icon: Setting,
+      leaves: flattenMenuLeaves(platformRoot.value.children)
+    })
+  }
+
+  for (const root of menus.state.tree.filter((node) => node.code !== '90')) {
+    const leaves = root.children.length
+      ? flattenMenuLeaves(root.children)
+      : root.route
+        ? [{ key: root.code, title: root.name, route: root.route, node: root }]
+        : []
+    if (!leaves.length) continue
+    groups.push({
+      key: root.code,
+      title: root.name,
+      icon: ROOT_ICONS[root.code] ?? Grid,
+      leaves
+    })
+  }
+
+  groups.push({
+    key: 'master-data',
+    title: '基础资料',
+    icon: Files,
+    leaves: catalog.state.objects.map((object) => ({
+      key: `object:${object.code}`,
+      title: object.name,
+      route: `/object/${object.code}`
+    }))
+  })
+
+  return groups.filter((group) => group.leaves.length > 0)
+})
+
+function openTreeLeaf(leaf: TreeNavLeaf): void {
+  if (leaf.node) {
+    openMenu(leaf.node)
+    return
+  }
+  if (leaf.route) void router.push(leaf.route)
+}
+
 onMounted(async () => {
   void catalog.load()
   void menus.load()
+  // 刷新页面时已有登录态：把服务端偏好拉回来（登录页那条路径已经在登录成功后拉过）
+  void appearance.loadRemote()
   try {
     metaVersion.value = await runtimeApi.metaVersion()
   } catch {
@@ -111,7 +210,6 @@ function menuName(): string {
 }
 
 function openMenu(node: MenuNode): void {
-  menuDrawer.value = false
   const target = node.route
   if (!target) return
   if (target.startsWith('/m/')) {
@@ -262,15 +360,17 @@ function onUserCommand(command: string): void {
 
 <template>
   <div class="shell" :data-nav="navMode">
-    <div
-      v-if="navMode === 'tree' && menuDrawer"
-      class="nav-backdrop"
-      @click="menuDrawer = false"
+    <TreeNavRail
+      v-if="navMode === 'tree'"
+      :groups="treeGroups"
+      :current-path="route.path"
+      @select="openTreeLeaf"
     />
+
     <aside
-      v-show="navMode === 'side' || (navMode === 'tree' && menuDrawer)"
+      v-show="navMode === 'side'"
       class="sidebar"
-      :class="{ 'is-collapsed': collapsed, 'is-overlay': navMode === 'tree' }"
+      :class="{ 'is-collapsed': collapsed }"
     >
       <div class="brand">
         <div class="logo">APS</div>
@@ -419,17 +519,6 @@ function onUserCommand(command: string): void {
             <Fold v-else />
           </el-icon>
         </el-button>
-        <el-button
-          v-if="navMode === 'tree'"
-          text
-          class="nav-open-btn"
-          title="打开菜单树"
-          @click="menuDrawer = true"
-        >
-          <el-icon><Grid /></el-icon>
-          <span>菜单</span>
-        </el-button>
-
         <el-breadcrumb separator="/">
           <el-breadcrumb-item v-for="item in breadcrumb" :key="item.label" :to="item.to">
             {{ item.label }}
@@ -549,32 +638,6 @@ function onUserCommand(command: string): void {
 .sidebar.is-collapsed {
   width: 64px;
 }
-
-/* 弹窗树形：同一份菜单做成浮层，避免两套导航代码 */
-.sidebar.is-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 248px;
-  box-shadow: 0 18px 60px rgba(8, 16, 26, 0.42);
-  animation: nav-slide-in 0.18s ease;
-}
-
-.nav-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 19;
-  background: rgba(9, 16, 24, 0.38);
-  backdrop-filter: blur(1px);
-}
-
-@keyframes nav-slide-in {
-  from { transform: translateX(-14px); opacity: 0.4; }
-  to { transform: translateX(0); opacity: 1; }
-}
-
-.nav-open-btn { display: inline-flex; gap: 4px; font-size: 13px; }
 
 .brand {
   display: flex;

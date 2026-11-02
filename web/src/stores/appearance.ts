@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
+import { preferenceApi } from '../api/preference'
 
-/** 导航模式：侧边导航 / 弹窗树形 / 顶部导航 */
+/** 导航模式：侧边导航 / 树形导航（窄图标栏 + 弹出菜单树） / 顶部导航 */
 export type NavMode = 'side' | 'tree' | 'top'
 /** 标签栏形态：经典 / 梯形书签 / 圆角卡片 / 直角复古 / 下划线 */
 export type TabStyle = 'classic' | 'trapezoid' | 'card' | 'retro' | 'underline'
@@ -17,7 +18,7 @@ export type ThemeKey =
   | 'sand'
   | 'cyber'
   | 'rose'
-export type ColorMode = 'light' | 'dark'
+export type ColorMode = 'light' | 'dark' | 'auto'
 /** 字号：标准 / 大 / 特大 */
 export type FontSize = 'standard' | 'large' | 'xlarge'
 /** 圆角风格：直角 / 默认 / 圆润 */
@@ -86,7 +87,7 @@ export const rmbPalette: { value: number; label: string; name: string; color: st
 
 export const navModeOptions: { key: NavMode; label: string; hint: string }[] = [
   { key: 'side', label: '侧边导航', hint: '默认，常驻左侧' },
-  { key: 'tree', label: '弹窗树形', hint: '点击弹出菜单树，省横向空间' },
+  { key: 'tree', label: '树形导航', hint: '窄图标栏常驻，点图标弹出菜单树' },
   { key: 'top', label: '顶部导航', hint: '一级菜单横排，适合大屏' }
 ]
 
@@ -178,7 +179,7 @@ function read(): AppearanceState {
       navMode: pick(parsed.navMode, ['side', 'tree', 'top'], DEFAULTS.navMode),
       tabStyle: pick(parsed.tabStyle, ['classic', 'trapezoid', 'card', 'retro', 'underline'], DEFAULTS.tabStyle),
       theme: pick(parsed.theme, themePresets.map((t) => t.key), DEFAULTS.theme),
-      mode: parsed.mode === 'dark' ? 'dark' : 'light',
+      mode: parsed.mode === 'dark' || parsed.mode === 'auto' ? parsed.mode : 'light',
       fontSize: pick(parsed.fontSize, ['standard', 'large', 'xlarge'], DEFAULTS.fontSize),
       radius: pick(parsed.radius, ['square', 'default', 'round'], DEFAULTS.radius),
       moneyTone: parsed.moneyTone !== false
@@ -196,18 +197,33 @@ const state = reactive<AppearanceState>(read())
  * - 内联 CSS 变量承载主题色阶（11 套主题不必写 11 段 CSS）
  * - dark 类供 Element Plus 官方暗色变量接管
  */
+const darkQuery = typeof window !== 'undefined' && window.matchMedia
+  ? window.matchMedia('(prefers-color-scheme: dark)')
+  : null
+
+/** 系统是否深色：用响应式对象承载，界面（如抽屉提示）才能跟着系统切换重绘 */
+export const systemDark = reactive({ value: darkQuery?.matches ?? false })
+
+/** 实际生效的明暗：auto 时跟随系统 */
+export function effectiveMode(): 'light' | 'dark' {
+  if (state.mode !== 'auto') return state.mode
+  return systemDark.value ? 'dark' : 'light'
+}
+
 export function applyAppearance(): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
+  const mode = effectiveMode()
   root.dataset.theme = state.theme
-  root.dataset.mode = state.mode
+  root.dataset.mode = mode
+  root.dataset.modePreference = state.mode
   root.dataset.nav = state.navMode
   root.dataset.tabs = state.tabStyle
   root.dataset.font = state.fontSize
   root.dataset.radius = state.radius
   root.dataset.moneyTone = state.moneyTone ? 'on' : 'off'
-  root.classList.toggle('dark', state.mode === 'dark')
-  root.style.colorScheme = state.mode
+  root.classList.toggle('dark', mode === 'dark')
+  root.style.colorScheme = mode
 
   for (const [name, value] of Object.entries(scaleOf(presetOf(state.theme).base))) {
     root.style.setProperty(name, value)
@@ -235,20 +251,73 @@ export function patchAppearance(patch: Partial<AppearanceState>): void {
   Object.assign(state, patch)
   applyAppearance()
   persist()
+  schedulePush()
 }
 
 export function resetAppearance(): void {
   Object.assign(state, DEFAULTS)
   applyAppearance()
   persist()
+  schedulePush()
+}
+
+if (darkQuery) {
+  darkQuery.addEventListener('change', (event) => {
+    systemDark.value = event.matches
+    if (state.mode === 'auto') applyAppearance()
+  })
 }
 
 applyAppearance()
+
+// ---------------------------------------------------------------- 跨设备同步
+
+let syncing = false
+let pushTimer: number | null = null
+
+/** 登录后调用：把服务端偏好合并进来（没有或拉取失败就沿用本地值） */
+export async function loadRemoteAppearance(): Promise<void> {
+  try {
+    const all = await preferenceApi.all()
+    const raw = all.appearance
+    if (!raw) return
+    const parsed = JSON.parse(raw) as Partial<AppearanceState>
+    syncing = true
+    Object.assign(state, {
+      navMode: pick(parsed.navMode, ['side', 'tree', 'top'], state.navMode),
+      tabStyle: pick(parsed.tabStyle, ['classic', 'trapezoid', 'card', 'retro', 'underline'], state.tabStyle),
+      theme: pick(parsed.theme, themePresets.map((t) => t.key), state.theme),
+      mode: parsed.mode === 'dark' || parsed.mode === 'auto' ? parsed.mode : 'light',
+      fontSize: pick(parsed.fontSize, ['standard', 'large', 'xlarge'], state.fontSize),
+      radius: pick(parsed.radius, ['square', 'default', 'round'], state.radius),
+      moneyTone: parsed.moneyTone !== false
+    })
+    applyAppearance()
+    persist()
+  } catch {
+    // 未登录或网络失败：本地偏好照样生效
+  } finally {
+    syncing = false
+  }
+}
+
+/** 防抖回写服务端：连点主题卡片不会打一串请求 */
+function schedulePush(): void {
+  if (syncing || typeof window === 'undefined') return
+  if (pushTimer !== null) window.clearTimeout(pushTimer)
+  pushTimer = window.setTimeout(() => {
+    pushTimer = null
+    void preferenceApi.save('appearance', JSON.stringify(state)).catch(() => undefined)
+  }, 800)
+}
 
 export const appearance = {
   state,
   patch: patchAppearance,
   reset: resetAppearance,
   apply: applyAppearance,
+  loadRemote: loadRemoteAppearance,
+  effectiveMode,
+  systemDark,
   defaults: DEFAULTS
 }

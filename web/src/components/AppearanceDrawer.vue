@@ -109,7 +109,7 @@
       <!-- 明暗模式 -->
       <section class="group">
         <h4>明暗模式</h4>
-        <div class="grid grid-2">
+        <div class="grid grid-3">
           <button
             type="button"
             class="opt mode"
@@ -128,7 +128,19 @@
             <el-icon><Moon /></el-icon>
             <span>暗色</span>
           </button>
+          <button
+            type="button"
+            class="opt mode"
+            :class="{ active: state.mode === 'auto' }"
+            @click="appearance.patch({ mode: 'auto' })"
+          >
+            <el-icon><Monitor /></el-icon>
+            <span>跟随系统</span>
+          </button>
         </div>
+        <p class="tip">
+          {{ state.mode === 'auto' ? `当前系统为${appearance.effectiveMode() === 'dark' ? '暗色' : '亮色'}，切换系统主题会自动跟随。` : '偏好会跟随账号同步到其它设备（登录后生效）。' }}
+        </p>
       </section>
 
       <!-- 圆角风格 -->
@@ -161,7 +173,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Moon, Sunny, Refresh } from '@element-plus/icons-vue'
+import { Monitor, Moon, Sunny, Refresh } from '@element-plus/icons-vue'
 import {
   appearance,
   fontSizeOptions,

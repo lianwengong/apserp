@@ -1,7 +1,8 @@
 # 外观与偏好设置（前端）
 
-> 入口：顶栏右侧齿轮按钮「外观与偏好设置」。全部选项**即时生效**并记住（`localStorage`），
-> 刷新、重开浏览器都保持；「恢复默认」一键回到出厂设置。
+> 入口：顶栏右侧齿轮按钮「外观与偏好设置」。全部选项**即时生效**并记住：
+> 本地 `localStorage` 保证首屏秒开，登录后与 `plat.UserPreference` 双向同步（换机器也一致）；
+> 「恢复默认」一键回到出厂设置，并同步覆盖服务端。
 
 ## 1. 七个分组与作用
 
@@ -12,7 +13,7 @@
 | **视觉主题配色方案** | 11 套（墨绿·商务 … 玫瑰红·营销） | 内联 CSS 变量（`--brand*` / `--el-color-primary*`） | 按钮、链接、选中态、图表等全部走品牌色的地方 |
 | **人民币文化色系** | 100/50/20/10/5/1 六档 | `--rmb-100 … --rmb-1` | 金额列按面额着色（可关） |
 | **字号** | 标准 13px / 大 14px / 特大 16px | `--app-font-size`、`--el-font-size-base` | 正文、表格、下拉菜单 |
-| **明暗模式** | 亮色 / 暗色 | `html.dark` + `html[data-mode]` | 全站（含 Element Plus 暗色变量） |
+| **明暗模式** | 亮色 / 暗色 / **跟随系统** | `html.dark` + `data-mode`（生效值）+ `data-mode-preference`（选择） | 全站（含 Element Plus 暗色变量） |
 | **圆角风格** | 直角 2px / 默认 10px / 圆润 16px | `--radius`、`--el-border-radius-base` | 卡片、按钮、弹层 |
 
 ## 2. 三种导航模式
@@ -47,26 +48,53 @@ Element：--el-color-primary / light-3/5/7/8/9 / dark-2
 - 可关：偏好里的「金额按面额着色」关闭后，`MoneyText` 退化为普通文本；
 - 显示格式化在 `utils/money.ts`，渲染组件是 `components/MoneyText.vue`，列表通过 `CellValue` 自动套用。
 
-## 5. 持久化与首屏
+## 5. 明暗：跟随系统怎么算
 
-- 键：`apserp.appearance.v2`（老键 `apserp.appearance` 会自动迁移，只读一次）；
-- `main.ts` 在 `app.mount` **之前**调用 `applyAppearance()`，避免首屏闪一下默认色再变色；
-- 写入的是 `<html>` 的 `data-*` 与内联 CSS 变量，`<script>` 不需要参与渲染决策；
-- 隐私模式下 `localStorage` 不可写时不报错，当次会话仍然生效。
+- `mode='auto'` 时由 `matchMedia('(prefers-color-scheme: dark)')` 决定实际明暗；
+- 数据上分两个值：`data-mode`（**生效**值，light/dark）+ `data-mode-preference`（用户**选择**，含 auto），
+  CSS 与 Element Plus 只认 `data-mode`，避免每个选择器都要写三态；
+- 系统主题变化时监听 `change` 立即重算并重绘抽屉里的提示文字（系统深浅变化 → `systemDark` 响应式对象更新）；
+- 首屏在 `app.mount` 之前判定，不会先亮后暗闪一下。
 
-## 6. 边界（明确不做）
+## 6. 持久化：本地 + 账号双写
 
-- 偏好是**设备级**的，不跟账号走（同一账号换机器会回到该机器的设置）；要跟账号需后端加 `plat.UserPreference`；
+| 时机 | 动作 |
+|---|---|
+| 页面加载（未登录） | 读 `localStorage['apserp.appearance.v2']` 并应用（兼容老键 `apserp.appearance`） |
+| 登录成功 / 主框架挂载 | `GET /api/preference` 拉回账号偏好，覆盖本地并重绘 |
+| 任意修改 / 恢复默认 | 先写本地，再 800ms 防抖 `PUT /api/preference/appearance` |
+| 拉取失败（未登录/网络问题） | 静默忽略，本地偏好照常生效 |
+
+- `main.ts` 在 `app.mount` **之前**调用 `applyAppearance()`，避免首屏闪一下默认色；
+- 写入的是 `<html>` 的 `data-*` 与内联 CSS 变量，不需要脚本参与渲染决策；
+- 隐私模式下 `localStorage` 不可写时不报错，当次会话仍生效；
+- 同一账号多端同时改是「后写覆盖」，不做冲突合并（外观配置不值得做 CRDT）。
+
+## 7. 跨设备同步接口
+
+| 用途 | 接口 |
+|---|---|
+| 拉全部偏好 | `GET /api/preference` → `{"appearance":"{...}"}` |
+| 拉单个 | `GET /api/preference/{key}` |
+| 保存 | `PUT /api/preference/{key}`，body `{"value":"..."}` |
+| 删除（回默认） | `DELETE /api/preference/{key}` |
+
+存储：`plat.UserPreference`（租户+用户+键唯一，值 ≤64KB，软删，带 RLS 谓词）。
+只接 `appearance` 这类**纯展示**配置；业务参数走系统参数表。
+
+## 8. 边界（明确不做）
+
 - 不支持自定义主色（只给 11 套预设），避免出现不可维护的对比度问题；
-- 暗色模式是整套覆盖，不提供「跟随系统」切换（若需要可在 `applyAppearance` 里接 `matchMedia`）。
+- 暗色是整套覆盖，不细到单个组件；
+- 金额着色按「金额大小」落档；若业务要按应收/应付/核销状态着色，属于业务规则，需要另行给口径。
 
-## 7. 验证
+## 9. 验证
 
-`tools/shot/appearance-e2e.mjs`（Playwright）：
+`tools/shot/appearance-e2e.mjs`（抽屉与控制项）+ `tools/shot/pref-sync-e2e.mjs`（跟随系统与跨设备同步）：
 
 - 抽屉七个分组齐全、11 套主题、5 种标签栏、6 个色块；
 - 切主题 → `data-theme` 与 `--el-color-primary` 同步变化；
 - 字号特大 → `body` 计算字号 16px；圆润 → `--radius` 16px；
-- 弹窗树形：侧边栏隐藏 → 点「菜单」浮层出现 → 点遮罩关闭；
-- 顶部导航：`.topnav` 渲染且一级项 11 个；
-- 暗色：`html.dark` 存在；刷新后导航/暗色/字号三项保持。
+- 弹窗树形：侧边栏隐藏 → 点「菜单」浮层出现 → 点遮罩关闭；顶部导航 `.topnav` 一级项 11 个；
+- 跟随系统：系统暗色 → `html.dark`；切亮 → 立即取消；抽屉提示文字同步变化；
+- 跨设备：登录后界面状态与服务端 JSON 逐项一致；改主题/字号后服务端被回写；恢复默认后本地与服务端同时回默认。

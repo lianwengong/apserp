@@ -5,6 +5,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { Lock, OfficeBuilding, User } from '@element-plus/icons-vue'
 import { login } from '../api/auth'
 import { session } from '../stores/session'
+import { appearance } from '../stores/appearance'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,6 +43,7 @@ async function submit(): Promise<void> {
     })
     session.setLogin(result, form.tenantCode.trim())
     await session.loadMe()
+    await appearance.loadRemote()
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
     await router.replace(redirect)
   } catch (ex) {
