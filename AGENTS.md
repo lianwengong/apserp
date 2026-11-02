@@ -97,6 +97,12 @@ src/test/java/com/apserp/
 | 2026-11-02 | 主子表「软删除」写库成功，但明细里仍能看到已删行 | 列表引擎只有当**字段元数据登记了 `IsDeleted`** 时才追加 `AND IsDeleted = 0`；任何要软删的表必须把该字段登记为隐藏字段（`IsVisible=0`） |
 | 2026-11-02 | 明细表格里没填的数字列以 `null` 提交，顶掉列默认值 → 「不能将值 NULL 插入列 Sort」 | 服务端保存子行前剔除「非空字段上的 null」（视为没填，交给默认值）；只有可空字段才允许显式 null |
 | 2026-11-02 | `sys.security_predicates` 没有 `security_policy_id` 列，按它 JOIN 判断「表是否已在 TenantPolicy 里」会报列名无效 | 用 `WHERE target_object_id = OBJECT_ID('schema.Table')` 判断即可 |
+| 2026-11-02 | 往 `application.yml` 追加**第二个顶层 `spring:` 块**：YAML 后键覆盖前键，datasource/flyway 配置被整块吃掉（启动直接连不上库） | 只能往已有的 `spring:` 块里合并；改完用 `Select-String '^[a-z]+:'` 检查顶层键没有重复 |
+| 2026-11-02 | SQL 里 `o.StatusField` 不写 `AS`：返回的列名就是 `StatusField`，前端按 `statusField` 取到 `undefined`（表格整列空白） | 给每个非直观别名显式写 `AS xxx`；前端拿到 JSON 先看键名大小写再写代码 |
+| 2026-11-02 | Playwright 用 `innerText` 断言设计器表格内容：值都在 `<input>` 里，`innerText` 拿到的是空表格 → 误判失败 | 表单类断言用 `inputValue()` 或直接数行；表格里的文本只用于断言表头 |
+| 2026-11-02 | 打印/导出的 HTML 直接插值单据字段：单据名里写 `<script>` 就能打穿打印页 | 模板占位符一律 HTML 转义（`PrintService.escape`），并加断言「不会输出 `<script>`」 |
+| 2026-11-02 | 新增子表（DocStatus / DocTransition / PrintTemplate）后，发布回滚报外键冲突 `DELETE plat.DataObject` | 回滚顺序：先删所有指向 DataObject 的子表（关系、状态、流转、打印模板），再删对象；同时把这些表加入发布快照，否则回滚后配置丢失 |
+
 
 
 ## 7. 术语表
