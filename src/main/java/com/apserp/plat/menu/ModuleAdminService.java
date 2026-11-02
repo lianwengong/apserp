@@ -33,9 +33,11 @@ public class ModuleAdminService {
     private static final String CODE_PATTERN = "[A-Za-z0-9][A-Za-z0-9_.-]{0,59}";
 
     private final JdbcTemplate jdbc;
+    private final TerminalAdminService terminalAdmin;
 
-    public ModuleAdminService(JdbcTemplate jdbc) {
+    public ModuleAdminService(JdbcTemplate jdbc, TerminalAdminService terminalAdmin) {
         this.jdbc = jdbc;
+        this.terminalAdmin = terminalAdmin;
     }
 
     // ---------------------------------------------------------------- DTO
@@ -333,10 +335,11 @@ public class ModuleAdminService {
         if (n == 0) {
             throw new ApiException(ErrorCode.NOT_FOUND, "模块不存在：" + id);
         }
-        // 模块没了，它的权限点也该收走（否则权限设计器里留一堆点不亮的孤儿资源）
+        // 模块没了，它的权限点与终端启用记录也该收走
         if (code != null) {
             dropPermission("MOD:" + code);
         }
+        terminalAdmin.forgetModule(id);
         log.info("module_delete tenant={} id={} force={}", tenantId, id, force);
     }
 
@@ -538,6 +541,13 @@ public class ModuleAdminService {
                 + "JOIN plat.[Menu] mn ON mn.Id = mt.MenuId WHERE mn.TenantId = ? AND mn.IsDeleted = 0", tenantId));
         terminals.put("moduleTerminalRows", count("SELECT COUNT(*) FROM plat.ModuleTerminal mt "
                 + "JOIN plat.[Module] md ON md.Id = mt.ModuleId WHERE md.TenantId = ? AND md.IsDeleted = 0", tenantId));
+        // 规则校验：菜单的模块必须在该终端启用（V41 之后应恒为 0）
+        terminals.put("ruleViolations", count("""
+                SELECT COUNT(*) FROM plat.[Menu] m
+                WHERE m.TenantId = ? AND m.IsDeleted = 0 AND m.ModuleId IS NOT NULL
+                  AND NOT EXISTS (SELECT 1 FROM plat.ModuleTerminal mt
+                                  WHERE mt.ModuleId = m.ModuleId AND mt.TerminalType = m.TerminalType)
+                """, tenantId));
         List<Map<String, Object>> byType = jdbc.queryForList("""
                 SELECT mt.TerminalType AS terminalType, COUNT(*) AS menus
                 FROM plat.MenuTerminal mt JOIN plat.[Menu] mn ON mn.Id = mt.MenuId
@@ -578,6 +588,10 @@ public class ModuleAdminService {
         int moduleTerminal = ((Number) terminals.getOrDefault("moduleTerminalRows", 0)).intValue();
         if (moduleTerminal == 0) {
             out.add("plat.ModuleTerminal 是空表：终端差异只在菜单层生效，按模块配终端不会起作用");
+        }
+        int violations = ((Number) terminals.getOrDefault("ruleViolations", 0)).intValue();
+        if (violations > 0) {
+            out.add("有 " + violations + " 条菜单的模块没在该终端启用（违反「菜单模块必须属于本终端」）");
         }
         return out;
     }

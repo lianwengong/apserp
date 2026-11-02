@@ -39,9 +39,9 @@ export const moduleAdminApi = {
     })
 }
 
-/** 菜单设置管理（菜单树 / 终端可见性） */
+/** 菜单设置管理（菜单树 / 终端归属） */
 export const menuAdminApi = {
-  tree: (params: { keyword?: string; moduleId?: number | null } = {}) =>
+  tree: (params: { keyword?: string; moduleId?: number | null; terminalType?: number | null } = {}) =>
     request<MenuNode[]>(`/api/admin/menus/tree${queryString(params)}`),
   options: () =>
     request<{
@@ -55,10 +55,49 @@ export const menuAdminApi = {
     request<{ id: number }>('/api/admin/menus', { method: 'POST', body }),
   move: (body: { id: number; parentId: number | null; sort: number }) =>
     request<void>('/api/admin/menus/move', { method: 'POST', body }),
-  remove: (id: number) => request<void>(`/api/admin/menus/${id}`, { method: 'DELETE' }),
-  terminals: (id: number) => request<number[]>(`/api/admin/menus/${id}/terminals`),
-  saveTerminals: (id: number, terminals: number[]) =>
-    request<number[]>(`/api/admin/menus/${id}/terminals`, { method: 'PUT', body: terminals })
+  remove: (id: number) => request<void>(`/api/admin/menus/${id}`, { method: 'DELETE' })
+}
+
+/** 终端与功能模块：终端能用哪些模块（唯一来源） */
+export const terminalAdminApi = {
+  overview: () =>
+    request<{ terminals: TerminalDto[]; moduleTotal: number }>('/api/admin/terminals/overview'),
+  list: () => request<TerminalDto[]>('/api/admin/terminals'),
+  allModules: (terminalType: number) =>
+    request<TerminalModuleOption[]>(`/api/admin/terminals/${terminalType}/modules/all`),
+  enabledModules: (terminalType: number) =>
+    request<TerminalModuleOption[]>(`/api/admin/terminals/${terminalType}/modules`),
+  saveModules: (terminalType: number, moduleIds: number[]) =>
+    request<TerminalModuleOption[]>(`/api/admin/terminals/${terminalType}/modules`, {
+      method: 'PUT',
+      body: moduleIds
+    }),
+  enableModule: (terminalType: number, moduleId: number) =>
+    request<TerminalModuleOption[]>(`/api/admin/terminals/${terminalType}/modules/${moduleId}`, {
+      method: 'POST'
+    }),
+  disableModule: (terminalType: number, moduleId: number) =>
+    request<TerminalModuleOption[]>(`/api/admin/terminals/${terminalType}/modules/${moduleId}`, {
+      method: 'DELETE'
+    })
+}
+
+export interface TerminalDto {
+  terminalType: number
+  label: string
+  moduleCount: number
+  menuCount: number
+  functionCount: number
+}
+
+export interface TerminalModuleOption {
+  id: number
+  parentId: number | null
+  code: string
+  name: string
+  level: number
+  enabled: boolean
+  menuCount: number
 }
 
 // ---------------------------------------------------------------- 类型
@@ -76,6 +115,7 @@ export interface ModelMap {
   terminals: {
     menuTerminalRows: number
     moduleTerminalRows: number
+    ruleViolations: number
     byType: { terminalType: number; menus: number }[]
   }
   permissions: { mod: number; fun: number; data: number; design: number }
@@ -195,7 +235,7 @@ export interface MenuNode {
   badgeExpr: string | null
   enabled: boolean
   remark: string | null
-  terminals: number[]
+  terminalType: number
   children: MenuNode[]
 }
 
@@ -215,7 +255,7 @@ export interface MenuSaveBody {
   badgeExpr?: string | null
   enabled: boolean
   remark?: string | null
-  terminals: number[]
+  terminalType: number
 }
 
 export interface OptionDto {

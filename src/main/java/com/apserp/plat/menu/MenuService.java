@@ -20,8 +20,9 @@ import org.springframework.stereotype.Service;
  * <p>权限：平台管理员返回全量；普通用户按 {@link PermissionService#grantedResources()}
  * 过滤（MOD:模块编码 或 FUN:功能编码.动作），父节点只要有可见子节点就保留。</p>
  *
- * <p>终端：MenuTerminal 里登记的菜单按 TerminalType 过滤；没有登记终端归属的菜单
- * 默认对所有终端可见（兼容早期数据）。</p>
+ * <p>终端：每条菜单只属于一个终端（{@code Menu.TerminalType}），按终端号直接过滤；
+ * 终端能用哪些功能模块由 {@code plat.ModuleTerminal} 决定，写菜单时就已校验过
+ * （见 {@link MenuAdminService#save}），所以这里不需要再校验一遍。</p>
  */
 @Service
 public class MenuService {
@@ -50,12 +51,8 @@ public class MenuService {
             FROM plat.[Menu] m
             LEFT JOIN plat.[Module] md ON md.Id = m.ModuleId AND md.TenantId = m.TenantId
             WHERE m.TenantId = ?
+              AND m.TerminalType = ?
               AND m.IsDeleted = 0 AND m.IsEnabled = 1 AND m.IsVisible = 1
-              AND (
-                    NOT EXISTS (SELECT 1 FROM plat.MenuTerminal mt WHERE mt.MenuId = m.Id)
-                 OR EXISTS (SELECT 1 FROM plat.MenuTerminal mt
-                            WHERE mt.MenuId = m.Id AND mt.TerminalType = ? AND mt.IsVisible = 1)
-              )
             ORDER BY m.Sort, m.Id
             """;
 

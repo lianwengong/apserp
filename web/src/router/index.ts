@@ -8,6 +8,7 @@ import TodoView from '../views/TodoView.vue'
 import WorkflowCenter from '../views/WorkflowCenter.vue'
 import ModuleAdminView from '../views/system/ModuleAdminView.vue'
 import MenuAdminView from '../views/system/MenuAdminView.vue'
+import TerminalAdminView from '../views/system/TerminalAdminView.vue'
 import MenuPlaceholder from '../views/MenuPlaceholder.vue'
 import PlatformOverview from '../views/admin/PlatformOverview.vue'
 import TenantListView from '../views/admin/TenantListView.vue'
@@ -50,6 +51,7 @@ const router = createRouter({
         { path: 'workflow', name: 'workflow', component: WorkflowCenter, meta: { title: '流程中心' } },
         { path: 'system/modules', name: 'system-modules', component: ModuleAdminView, meta: { title: '功能模块管理' } },
         { path: 'system/menus', name: 'system-menus', component: MenuAdminView, meta: { title: '菜单设置' } },
+        { path: 'system/terminals', name: 'system-terminals', component: TerminalAdminView, meta: { title: '终端与功能' } },
         {
           path: 'm/:code',
           name: 'menu-page',

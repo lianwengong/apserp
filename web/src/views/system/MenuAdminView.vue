@@ -18,6 +18,16 @@
           @change="loadTree"
         />
         <el-select
+          v-model="terminalFilter"
+          size="small"
+          clearable
+          placeholder="按终端过滤"
+          style="width: 130px"
+          @change="loadTree"
+        >
+          <el-option v-for="t in options.terminalTypes" :key="t.value" :value="t.value" :label="t.label" />
+        </el-select>
+        <el-select
           v-model="moduleFilter"
           size="small"
           clearable
@@ -58,6 +68,7 @@
                   <el-tag v-if="data.menuType === 1" size="small" type="info" effect="plain">目录</el-tag>
                   <el-tag v-if="!data.enabled" size="small" type="danger" effect="plain">停用</el-tag>
                   <el-tag v-else-if="!data.visible" size="small" type="warning" effect="plain">隐藏</el-tag>
+                  <el-tag size="small" type="info" effect="plain">{{ terminalName(data.terminalType) }}</el-tag>
                   <span v-if="data.pageCode" class="node-meta">页 {{ data.pageCode }}</span>
                   <span class="node-ops">
                     <el-button link size="small" @click.stop="newMenu(data)">加子</el-button>
@@ -114,17 +125,8 @@
                 {{ current.enabled ? '启用' : '停用' }}
               </el-tag>
             </el-descriptions-item>
-            <el-descriptions-item label="终端" :span="2">
-              <el-tag
-                v-for="t in currentTerminals"
-                :key="t"
-                size="small"
-                effect="plain"
-                style="margin-right: 6px"
-              >
-                {{ terminalName(t) }}
-              </el-tag>
-              <span v-if="!currentTerminals.length" class="muted">未限制（所有终端可见）</span>
+            <el-descriptions-item label="所属终端">
+              <el-tag size="small" effect="plain">{{ terminalName(current.terminalType) }}</el-tag>
             </el-descriptions-item>
             <el-descriptions-item label="角标表达式" :span="2">
               <span class="mono">{{ current.badgeExpr || '—' }}</span>
@@ -177,9 +179,14 @@
         <el-row :gutter="12">
           <el-col :span="12">
             <el-form-item label="绑定模块">
-              <el-select v-model="form.moduleId" clearable filterable placeholder="可不绑">
+              <el-select
+                v-model="form.moduleId"
+                clearable
+                filterable
+                :placeholder="terminalModules.length ? '可不绑' : '该终端还没有启用任何模块'"
+              >
                 <el-option
-                  v-for="m in options.modules"
+                  v-for="m in terminalModules"
                   :key="m.id"
                   :value="m.id"
                   :label="`${m.code} ${m.name}`"
@@ -220,13 +227,13 @@
         <el-form-item label="角标表达式">
           <el-input v-model="form.badgeExpr" placeholder="ctx.PendingCount > 0" />
         </el-form-item>
-        <el-form-item label="终端可见">
-          <el-checkbox-group v-model="form.terminals">
-            <el-checkbox v-for="t in options.terminalTypes" :key="t.value" :value="t.value">
+        <el-form-item label="所属终端" required>
+          <el-radio-group v-model="form.terminalType" @change="onTerminalChange">
+            <el-radio-button v-for="t in options.terminalTypes" :key="t.value" :value="t.value">
               {{ t.label }}
-            </el-checkbox>
-          </el-checkbox-group>
-          <div class="muted">不勾=所有终端可见</div>
+            </el-radio-button>
+          </el-radio-group>
+          <div class="muted">每条菜单只属于一个终端；切换终端后模块只能在「该终端已启用的模块」里选</div>
         </el-form-item>
         <el-form-item label="显示">
           <el-switch v-model="form.visible" />
@@ -245,13 +252,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { menuAdminApi, type MenuNode, type OptionDto } from '../../api/admin'
+import {
+  menuAdminApi,
+  terminalAdminApi,
+  type MenuNode,
+  type OptionDto,
+  type TerminalModuleOption
+} from '../../api/admin'
 
 const tree = ref<MenuNode[]>([])
 const current = ref<MenuNode | null>(null)
-const currentTerminals = ref<number[]>([])
+const terminalModules = ref<TerminalModuleOption[]>([])
 const keyword = ref('')
 const moduleFilter = ref<number | null>(null)
+const terminalFilter = ref<number | null>(null)
 const saving = ref(false)
 const formVisible = ref(false)
 
@@ -285,7 +299,7 @@ const form = reactive({
   badgeExpr: '',
   enabled: true,
   remark: '',
-  terminals: [] as number[]
+  terminalType: 1
 })
 
 const total = computed(() => countNodes(tree.value))
@@ -311,12 +325,11 @@ async function loadTree() {
   try {
     tree.value = await menuAdminApi.tree({
       keyword: keyword.value || undefined,
-      moduleId: moduleFilter.value ?? undefined
+      moduleId: moduleFilter.value ?? undefined,
+      terminalType: terminalFilter.value ?? undefined
     })
     if (current.value) {
-      const found = findNode(tree.value, current.value.id)
-      current.value = found
-      if (found) currentTerminals.value = await menuAdminApi.terminals(found.id)
+      current.value = findNode(tree.value, current.value.id)
     }
   } catch (e) {
     ElMessage.error((e as Error).message)
@@ -334,14 +347,9 @@ function findNode(nodes: MenuNode[], id: number): MenuNode | null {
 
 async function pick(data: MenuNode) {
   current.value = data
-  try {
-    currentTerminals.value = await menuAdminApi.terminals(data.id)
-  } catch (e) {
-    ElMessage.error((e as Error).message)
-  }
 }
 
-function newMenu(parent: MenuNode | null) {
+async function newMenu(parent: MenuNode | null) {
   Object.assign(form, {
     id: null,
     parentId: parent ? parent.id : null,
@@ -358,8 +366,9 @@ function newMenu(parent: MenuNode | null) {
     badgeExpr: '',
     enabled: true,
     remark: '',
-    terminals: []
+    terminalType: parent?.terminalType ?? 1
   })
+  await loadTerminalModules(form.terminalType)
   formVisible.value = true
 }
 
@@ -380,14 +389,36 @@ async function editMenu(data: MenuNode) {
     badgeExpr: data.badgeExpr ?? '',
     enabled: data.enabled,
     remark: data.remark ?? '',
-    terminals: await menuAdminApi.terminals(data.id).catch(() => [])
+    terminalType: data.terminalType
   })
+  await loadTerminalModules(data.terminalType)
   formVisible.value = true
+}
+
+async function loadTerminalModules(terminalType: number) {
+  try {
+    terminalModules.value = await terminalAdminApi.enabledModules(terminalType)
+  } catch (e) {
+    terminalModules.value = []
+    ElMessage.error((e as Error).message)
+  }
+}
+
+/** 切换终端后，原来选的模块如果不属于新终端，直接清掉并提示 */
+async function onTerminalChange(value: number | string | boolean) {
+  await loadTerminalModules(Number(value))
+  if (form.moduleId && !terminalModules.value.some((m) => m.id === form.moduleId)) {
+    form.moduleId = null
+    ElMessage.warning('原模块未在该终端启用，已清空选择')
+  }
 }
 
 async function save() {
   if (!form.code.trim()) return ElMessage.warning('菜单编码必填')
   if (!form.name.trim()) return ElMessage.warning('菜单名称必填')
+  if (form.moduleId && !terminalModules.value.some((m) => m.id === form.moduleId)) {
+    return ElMessage.warning('所选模块未在该终端启用，请先在「终端与功能」里启用')
+  }
   saving.value = true
   try {
     await menuAdminApi.save({ ...form, code: form.code.trim() })

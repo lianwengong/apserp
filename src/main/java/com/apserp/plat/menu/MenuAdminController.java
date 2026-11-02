@@ -23,8 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 保存    POST   /api/admin/menus                  带 id 即更新；terminals 为终端可见列表
  * 移动    POST   /api/admin/menus/move             拖拽/上移下移
  * 删除    DELETE /api/admin/menus/{id}
- * 终端    GET    /api/admin/menus/{id}/terminals
- *         PUT    /api/admin/menus/{id}/terminals
+ * 终端    GET    /api/admin/menus/terminals        终端类型字典
  * </pre>
  */
 @RestController
@@ -41,8 +40,9 @@ public class MenuAdminController {
     @GetMapping("/tree")
     public ApiResult<List<MenuAdminService.MenuNode>> tree(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Long moduleId) {
-        return ApiResult.ok(menuAdmin.tree(keyword, moduleId));
+            @RequestParam(required = false) Long moduleId,
+            @RequestParam(required = false) Integer terminalType) {
+        return ApiResult.ok(menuAdmin.tree(keyword, moduleId, terminalType));
     }
 
     @GetMapping("/options")
@@ -70,16 +70,13 @@ public class MenuAdminController {
         return ApiResult.ok(null);
     }
 
-    @GetMapping("/{id}/terminals")
-    public ApiResult<List<Integer>> terminals(@PathVariable long id) {
-        return ApiResult.ok(menuAdmin.terminalsOf(id));
-    }
-
-    @PutMapping("/{id}/terminals")
-    @RequiresPermission(value = "DESIGN:menu", action = "write")
-    public ApiResult<List<Integer>> saveTerminals(@PathVariable long id,
-                                                  @RequestBody List<Integer> terminals) {
-        menuAdmin.saveTerminals(id, terminals);
-        return ApiResult.ok(menuAdmin.terminalsOf(id));
+    /** 终端类型字典（菜单必须选一个）。 */
+    @GetMapping("/terminals")
+    public ApiResult<List<Map<String, Object>>> terminals() {
+        List<Map<String, Object>> out = new java.util.ArrayList<>();
+        for (int t = 1; t <= 6; t++) {
+            out.add(Map.of("value", t, "label", TerminalAdminService.label(t)));
+        }
+        return ApiResult.ok(out);
     }
 }

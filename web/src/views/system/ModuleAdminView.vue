@@ -55,7 +55,7 @@
           <div class="chain-label">终端可见性</div>
           <div class="chain-value">{{ model.terminals.menuTerminalRows }} 条</div>
           <div class="chain-note">
-            菜单层生效 · 模块层 {{ model.terminals.moduleTerminalRows }} 条
+            模块层 {{ model.terminals.moduleTerminalRows }} 条 · 越界 {{ model.terminals.ruleViolations }} 条
           </div>
         </div>
       </div>
