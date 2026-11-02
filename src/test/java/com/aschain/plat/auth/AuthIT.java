@@ -57,8 +57,8 @@ class AuthIT {
             st.executeUpdate("DELETE FROM plat.[User] WHERE UserName = '" + PLAIN_USER + "'");
             st.executeUpdate("INSERT INTO plat.[User] (TenantId, UserName, PasswordHash, PasswordSalt, "
                     + "DisplayName, UserType, IsEnabled, FailCount, IsDeleted) VALUES (1, '" + PLAIN_USER
-                    + "', 'BUiHQ9klRWk5zliqai6kcf6n4VK9DAbIUfCyeSXx3BU=', "
-                    + "'mH87uCBXyyWol8vyyAiSbg==', N'普通用户', 2, 1, 0, 0)");
+                    + "', 'aAFYmgxZqeEZfVb3BWklksetxQAOT8C8wpG0hWkm1x0=', "
+                    + "'Aeeawby1MJ/B1WVLHguAIw==', N'普通用户', 2, 1, 0, 0)");
             st.executeUpdate("INSERT INTO plat.UserRole (TenantId, UserId, RoleId, OrgId) "
                     + "SELECT 1, u.Id, r.Id, NULL FROM plat.[User] u JOIN plat.Role r "
                     + "ON r.TenantId = 1 AND r.Code = 'WH' WHERE u.UserName = '" + PLAIN_USER + "'");
@@ -77,7 +77,7 @@ class AuthIT {
 
     @Test
     void admin_login_should_issue_platform_admin_token() {
-        var result = authService.login("T001", "admin", "Apserp@2026");
+        var result = authService.login("T001", "admin", "AsChain@2026");
         assertThat(result.token()).isNotBlank();
         assertThat(result.mustChangePassword()).isTrue();
         var claims = jwtService.parse(result.token());
@@ -86,7 +86,7 @@ class AuthIT {
 
     @Test
     void plain_internal_role_must_not_be_platform_admin() {
-        var result = authService.login("T001", PLAIN_USER, "Apserp@2026");
+        var result = authService.login("T001", PLAIN_USER, "AsChain@2026");
         var claims = jwtService.parse(result.token());
         assertThat(claims.get(JwtService.CLAIM_ADMIN))
                 .as("仓管等内部角色绝不能带平台管理员标记")

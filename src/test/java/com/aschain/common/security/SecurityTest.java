@@ -14,15 +14,15 @@ class PasswordHasherTest {
     @Test
     void hash_should_verify_round_trip() {
         String salt = hasher.newSalt();
-        String hash = hasher.hash("Apserp@2026", salt);
-        assertThat(hasher.matches("Apserp@2026", hash, salt)).isTrue();
+        String hash = hasher.hash("AsChain@2026", salt);
+        assertThat(hasher.matches("AsChain@2026", hash, salt)).isTrue();
     }
 
     @Test
     void wrong_password_should_not_match() {
         String salt = hasher.newSalt();
-        String hash = hasher.hash("Apserp@2026", salt);
-        assertThat(hasher.matches("Apserp@2027", hash, salt)).isFalse();
+        String hash = hasher.hash("AsChain@2026", salt);
+        assertThat(hasher.matches("AsChain@2027", hash, salt)).isFalse();
     }
 
     @Test
@@ -41,9 +41,9 @@ class PasswordHasherTest {
     @Test
     void known_vector_should_match_bootstrap_admin() {
         // V20 迁移里写死的管理员初始口令，必须能被这里验证通过
-        String hash = "BUiHQ9klRWk5zliqai6kcf6n4VK9DAbIUfCyeSXx3BU=";
-        String salt = "mH87uCBXyyWol8vyyAiSbg==";
-        assertThat(hasher.matches("Apserp@2026", hash, salt)).isTrue();
+        String hash = "aAFYmgxZqeEZfVb3BWklksetxQAOT8C8wpG0hWkm1x0=";
+        String salt = "Aeeawby1MJ/B1WVLHguAIw==";
+        assertThat(hasher.matches("AsChain@2026", hash, salt)).isTrue();
     }
 }
 

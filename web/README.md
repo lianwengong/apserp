@@ -24,7 +24,7 @@ npm run typecheck    # vue-tsc --noEmit
 npm run build        # 产出 dist/（静态文件，交给 Nginx/网关托管）
 ```
 
-后端需先启动（`mvn spring-boot:run`，:8080）。演示账号：租户 `T001` / `admin` / `Apserp@2026`（仅开发环境提示，生产构建不会显示）。
+后端需先启动（`mvn spring-boot:run`，:8080）。演示账号：租户 `T001` / `admin` / `AsChain@2026`（仅开发环境提示，生产构建不会显示）。
 
 > 若执行环境禁止 npm 生命周期脚本，用 `npm install --ignore-scripts`：esbuild 走 `@esbuild/win32-x64` 预编译包，不需要 postinstall。
 

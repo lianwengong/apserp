@@ -32,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @EnabledIfEnvironmentVariable(named = "IT_ENABLED", matches = "true")
 class ForcePasswordChangeIT {
 
-    private static final String PWD = "Apserp@2026";
+    private static final String PWD = "AsChain@2026";
 
     @DynamicPropertySource
     static void datasource(DynamicPropertyRegistry registry) {
@@ -87,12 +87,12 @@ class ForcePasswordChangeIT {
         assertThatThrownBy(() -> AuthService.validatePasswordPolicy("12345678"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("字母与数字");
-        AuthService.validatePasswordPolicy("Apserp@2027");
+        AuthService.validatePasswordPolicy("AsChain@2027");
     }
 
     @Test
     void change_password_should_reissue_token() throws Exception {
-        String newPwd = "Apserp@2027";
+        String newPwd = "AsChain@2027";
         try {
             var result = authService.changePassword("T001", "admin", PWD, newPwd);
             assertThat(result.mustChangePassword()).isFalse();

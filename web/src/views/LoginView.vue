@@ -60,7 +60,7 @@ async function submit(): Promise<void> {
     <section class="brand-panel">
       <div class="brand-row">
         <span class="logo">APS</span>
-        <span class="brand-name">APS ERP</span>
+        <span class="brand-name">阿申商链</span>
       </div>
 
       <div class="brand-copy">
@@ -76,7 +76,7 @@ async function submit(): Promise<void> {
         </ul>
       </div>
 
-      <div class="brand-foot">APS ERP · 进销存 V3 · v0.1.0</div>
+      <div class="brand-foot">阿申商链 · 商贸供应链管理系统 · v0.1.0</div>
     </section>
 
     <section class="form-panel">
@@ -137,7 +137,7 @@ async function submit(): Promise<void> {
         </el-form>
 
         <p v-if="isDev" class="dev-hint">
-          开发环境演示账号：<code>T001 / admin / Apserp@2026</code>
+          开发环境演示账号：<code>T001 / admin / AsChain@2026</code>
         </p>
         <p class="legal muted">登录即表示同意内部系统使用规范</p>
       </div>

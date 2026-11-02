@@ -56,7 +56,7 @@ npm run dev        # http://127.0.0.1:5200 ，/api 代理到 127.0.0.1:8080
 npm run build      # 类型检查 + 产物 dist/
 ```
 
-演示账号：租户 `T001` / `admin` / `Apserp@2026`。目录、契约、已知限制见 [`web/README.md`](web/README.md)。
+演示账号：租户 `T001` / `admin` / `AsChain@2026`。目录、契约、已知限制见 [`web/README.md`](web/README.md)。
 
 ## 目录
 
