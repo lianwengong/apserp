@@ -4,6 +4,32 @@ import { request, queryString } from './http'
 export const designApi = {
   overview: () => request<Record<string, number>>('/api/design/overview'),
 
+  // ---------------- 打印模板
+  printTemplates: (objectCode?: string) =>
+    request<PrintTemplateDto[]>(
+      `/api/design/print-templates${objectCode ? `?objectCode=${encodeURIComponent(objectCode)}` : ''}`
+    ),
+  savePrintTemplate: (body: PrintTemplateSaveBody) =>
+    request<{ id: number }>('/api/design/print-templates', { method: 'POST', body }),
+  deletePrintTemplate: (id: number) =>
+    request<void>(`/api/design/print-templates/${id}`, { method: 'DELETE' }),
+  printPlaceholders: (objectCode: string) =>
+    request<string[]>(
+      `/api/design/print-templates/placeholders?objectCode=${encodeURIComponent(objectCode)}`
+    ),
+  previewRows: (objectCode: string) =>
+    request<{ page: number; size: number; total: number; rows: Record<string, unknown>[] }>(
+      `/api/meta/${encodeURIComponent(objectCode)}?page=1&size=1`
+    ).then((r) => r.rows),
+  renderPrint: (objectCode: string, id: number, templateCode: string) =>
+    fetch(
+      `/api/runtime/print?objectCode=${encodeURIComponent(objectCode)}&id=${id}&templateCode=${encodeURIComponent(templateCode)}`,
+      { headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` } }
+    ).then(async (res) => {
+      if (!res.ok) throw new Error(`渲染失败（HTTP ${res.status}）`)
+      return res.text()
+    }),
+
   // ---------------- 状态机
   docStatusOverview: () =>
     request<{
@@ -339,6 +365,30 @@ export interface DiffResult {
   fromVersion: number | null
   toVersion: number | null
   items: { kind: string; action: string; code: string }[]
+}
+
+export interface PrintTemplateDto {
+  id: number
+  objectCode: string
+  code: string
+  name: string
+  content: string
+  paperSize: string
+  isDefault: boolean
+  enabled: boolean
+  remark: string | null
+}
+
+export interface PrintTemplateSaveBody {
+  id?: number | null
+  objectCode: string
+  code: string
+  name: string
+  content: string
+  paperSize: string
+  isDefault: boolean
+  enabled: boolean
+  remark?: string | null
 }
 
 export interface StatusRow {

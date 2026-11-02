@@ -89,7 +89,7 @@ export const runtimeApi = {
 }
 
 export interface ExecuteResult {
-  kind: 'navigate' | 'download' | 'refresh' | 'message' | 'close'
+  kind: 'navigate' | 'download' | 'refresh' | 'message' | 'close' | 'print'
   message: string | null
   route: string | null
   downloadUrl: string | null

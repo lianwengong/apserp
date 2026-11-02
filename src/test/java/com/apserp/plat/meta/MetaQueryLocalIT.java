@@ -24,10 +24,10 @@ class MetaQueryLocalIT {
     @Test
     void schema_is_complete_after_flyway() throws Exception {
         try (Connection con = connect(true)) {
-            // 基线 225 + V30（2）+ V32（3）+ V33（1）+ V34（DocStatus / DocTransition）
-            assertThat(count(con, "sys.tables", "schema_id > 4")).isEqualTo(233);
-            assertThat(count(con, "sys.foreign_keys", "1 = 1")).isEqualTo(805);
-            assertThat(count(con, "sys.security_predicates", "1 = 1")).isEqualTo(187);
+            // 基线 225 + V30（2）+ V32（3）+ V33（1）+ V34（2）+ V36（PrintTemplate）
+            assertThat(count(con, "sys.tables", "schema_id > 4")).isEqualTo(234);
+            assertThat(count(con, "sys.foreign_keys", "1 = 1")).isEqualTo(806);
+            assertThat(count(con, "sys.security_predicates", "1 = 1")).isEqualTo(188);
             assertThat(count(con, "plat.Module", "1 = 1")).isEqualTo(635);
             assertThat(count(con, "plat.ModuleFunction", "1 = 1")).isEqualTo(1432);
             // 权限点会随数据对象/功能点增加，基线之外只做下界断言

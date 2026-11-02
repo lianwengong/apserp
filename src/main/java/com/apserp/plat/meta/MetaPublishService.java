@@ -280,7 +280,7 @@ public class MetaPublishService {
     private DiffResult diff(Map<String, Object> a, Map<String, Object> b, Integer from, Integer to) {
         List<DiffItem> items = new ArrayList<>();
         for (String kind : List.of("objects", "fields", "listViews", "listViewColumns", "formLayouts",
-                "formFields", "relations", "docStatuses", "docTransitions", "buttons", "buttonActions",
+                "formFields", "relations", "docStatuses", "docTransitions", "printTemplates", "buttons", "buttonActions",
                 "rules", "ruleBindings",
                 "workflows", "workflowNodes", "workflowApprovers", "rolePermissions", "fieldPermissions")) {
             Map<String, String> left = flatten((List<Map<String, Object>>) a.getOrDefault(kind, List.of()));
@@ -412,6 +412,12 @@ public class MetaPublishService {
                         + "JOIN plat.DataObject ch ON ch.Id = r.ChildObjectId WHERE r." + t
                         + " AND r.IsDeleted = 0 ORDER BY p.Code, r.Sort");
 
+        List<Map<String, Object>> printTemplates = jdbc.queryForList(
+                "SELECT o.Code AS ObjectCode, p.Code, p.Name, p.Content, p.PaperSize, p.IsDefault, "
+                        + "p.IsEnabled, p.Remark FROM plat.PrintTemplate p "
+                        + "JOIN plat.DataObject o ON o.Id = p.DataObjectId WHERE p." + t
+                        + " AND p.IsDeleted = 0 ORDER BY o.Code, p.Code");
+
         List<Map<String, Object>> docStatuses = jdbc.queryForList(
                 "SELECT o.Code AS ObjectCode, s.StatusValue, s.StatusName, s.Sort, s.CanEdit, s.CanDelete, "
                         + "s.CanSubmit, s.IsFinal, s.ColorType, s.IsEnabled FROM plat.DocStatus s "
@@ -423,6 +429,7 @@ public class MetaPublishService {
                         + "JOIN plat.DataObject o ON o.Id = tr.DataObjectId WHERE tr." + t
                         + " AND tr.IsDeleted = 0 ORDER BY o.Code, tr.FromStatus, tr.Sort");
 
+        s.put("printTemplates", printTemplates);
         s.put("docStatuses", docStatuses);
         s.put("docTransitions", docTransitions);
         s.put("relations", relations);
@@ -479,6 +486,8 @@ public class MetaPublishService {
         jdbc.update("DELETE FROM plat.DocTransition WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.DocStatus WHERE DataObjectId IN "
+                + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
+        jdbc.update("DELETE FROM plat.PrintTemplate WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.DataObjectField WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
@@ -620,6 +629,19 @@ public class MetaPublishService {
                     """, tenantId, objId, num(tr.get("FromStatus")), num(tr.get("ToStatus")),
                     tr.get("ActionCode"), tr.get("ActionName"), num(tr.get("Sort")),
                     bool(tr.get("IsEnabled")));
+        }
+        for (Map<String, Object> pt : (List<Map<String, Object>>) s.getOrDefault("printTemplates", List.of())) {
+            Long objId = objectIds.get(String.valueOf(pt.get("ObjectCode")));
+            if (objId == null) {
+                continue;
+            }
+            jdbc.update("""
+                    INSERT plat.PrintTemplate (TenantId, DataObjectId, Code, Name, Content, PaperSize,
+                                              IsDefault, IsEnabled, Remark, IsDeleted, CreatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, sysutcdatetime())
+                    """, tenantId, objId, pt.get("Code"), pt.get("Name"), pt.get("Content"),
+                    pt.get("PaperSize") == null ? "A4" : pt.get("PaperSize"),
+                    bool(pt.get("IsDefault")), bool(pt.get("IsEnabled")), pt.get("Remark"));
         }
         for (Map<String, Object> b : (List<Map<String, Object>>) s.getOrDefault("buttons", List.of())) {
             jdbc.update("""

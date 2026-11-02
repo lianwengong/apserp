@@ -45,6 +45,7 @@ public class RuntimeController {
     private final MetaOverlay metaOverlay;
     private final DocStatusService docStatusService;
     private final AttachmentService attachmentService;
+    private final PrintService printService;
     private final MetaPublishService publishService;
     private final PermissionService permissionService;
 
@@ -52,7 +53,8 @@ public class RuntimeController {
                              MetaQueryService queryService, MetaChildService childService,
                              ActionExecutor actionExecutor, MetaOverlay metaOverlay,
                              MetaPublishService publishService, DocStatusService docStatusService,
-                             AttachmentService attachmentService, PermissionService permissionService) {
+                             AttachmentService attachmentService, PrintService printService,
+                             PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
@@ -62,6 +64,7 @@ public class RuntimeController {
         this.publishService = publishService;
         this.docStatusService = docStatusService;
         this.attachmentService = attachmentService;
+        this.printService = printService;
         this.permissionService = permissionService;
     }
 
@@ -157,6 +160,29 @@ public class RuntimeController {
                 .header("Content-Type", "text/csv; charset=UTF-8")
                 .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
                 .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    // ---------------------------------------------------------------- 打印
+
+    /** 渲染单据打印页（HTML）。前端拿回后开新窗口打印，不经过下载。 */
+    @GetMapping("/print")
+    public org.springframework.http.ResponseEntity<String> print(
+            @RequestParam String objectCode,
+            @RequestParam long id,
+            @RequestParam(required = false) String templateCode) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
+        String html = printService.render(objectCode, id, templateCode);
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Type", "text/html; charset=UTF-8")
+                .body(html);
+    }
+
+    /** 模板里可用的占位符（设计器提示）。 */
+    @GetMapping("/print/placeholders")
+    public ApiResult<List<String>> printPlaceholders(@RequestParam String objectCode) {
+        return ApiResult.ok(printService.placeholders(objectCode));
     }
 
     // ---------------------------------------------------------------- 附件

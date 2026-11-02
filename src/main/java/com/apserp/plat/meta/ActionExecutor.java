@@ -164,12 +164,28 @@ public class ActionExecutor {
             case "DELETE" -> softDelete(req);
             case "SUBMIT" -> commandSubmitWorkflow(req.objectCode(), req.id(), req.params());
             case "EXPORT" -> commandExportCsv(req.objectCode(), req.id(), req.params());
+            case "PRINT" -> printUrl(req);
             case "REFRESH" -> ExecuteResult.refresh(action.successMessage());
             case "CLOSE" -> new ExecuteResult("close", action.successMessage(), null, null,
                     Map.of(), true);
             default -> throw new ApiException(ErrorCode.BAD_REQUEST,
                     "未知的内置动作：" + action.builtinCode());
         };
+    }
+
+    /**
+     * 打印：返回渲染地址，前端取回 HTML 后开新窗口打印。
+     * 模板编码从动作的 target 里取（设计器可指定用哪个模板），留空用默认模板。
+     */
+    private ExecuteResult printUrl(ExecuteRequest req) {
+        if (req.id() == null || req.id() <= 0) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "请先选择一条单据再打印");
+        }
+        String template = req.params() == null ? null : (String) req.params().get("templateCode");
+        String url = "/api/runtime/print?objectCode=" + urlEncode(req.objectCode())
+                + "&id=" + req.id()
+                + (template == null || template.isBlank() ? "" : "&templateCode=" + urlEncode(template));
+        return new ExecuteResult("print", null, null, url, Map.of(), false);
     }
 
     /** 软删除：按元数据把 IsDeleted 置 1，业务数据保留可追溯。 */

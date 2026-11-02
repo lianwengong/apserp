@@ -76,6 +76,24 @@ function confirmTextOf(action: ResolvedAction, actions: ResolvedAction[], btnTex
   return confirmOf(actions) ?? (action.builtinCode === 'DELETE' ? `${btnText}，确认继续？` : null)
 }
 
+/** 打印：取回渲染好的 HTML，写进新窗口再调浏览器打印。 */
+async function printPage(url: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` }
+  })
+  if (!res.ok) throw new Error(`打印渲染失败（HTTP ${res.status}）`)
+  const html = await res.text()
+  const win = window.open('', '_blank')
+  if (!win) {
+    ElMessage.warning('浏览器拦截了新窗口，请允许弹窗后重试')
+    return
+  }
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  win.print()
+}
+
 /** 带 token 下载：导出接口需要鉴权，不能直接用 window.open。 */
 async function download(url: string) {
   const res = await fetch(url, {
@@ -131,6 +149,9 @@ async function run(btn: ResolvedButton) {
       case 'download':
         if (result.downloadUrl) await download(result.downloadUrl)
         ElMessage.success('导出已开始下载')
+        break
+      case 'print':
+        if (result.downloadUrl) await printPage(result.downloadUrl)
         break
       case 'refresh':
         ElMessage.success(result.message || '已执行')

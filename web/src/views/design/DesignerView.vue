@@ -22,6 +22,9 @@
       <el-tab-pane label="状态机" name="status">
         <StatusDesigner />
       </el-tab-pane>
+      <el-tab-pane label="打印模板" name="print">
+        <PrintDesigner />
+      </el-tab-pane>
       <el-tab-pane label="规则设计器" name="rule">
         <RuleDesigner />
       </el-tab-pane>
@@ -48,13 +51,14 @@ import { designApi } from '../../api/design'
 import FieldDesigner from './FieldDesigner.vue'
 import RelationDesigner from './RelationDesigner.vue'
 import StatusDesigner from './StatusDesigner.vue'
+import PrintDesigner from './PrintDesigner.vue'
 import RuleDesigner from './RuleDesigner.vue'
 import ButtonDesigner from './ButtonDesigner.vue'
 import ApprovalDesigner from './ApprovalDesigner.vue'
 import PermissionDesigner from './PermissionDesigner.vue'
 import PublishDesigner from './PublishDesigner.vue'
 
-const TAB_KEYS = ['field', 'relation', 'status', 'rule', 'button', 'approval', 'permission', 'publish'] as const
+const TAB_KEYS = ['field', 'relation', 'status', 'print', 'rule', 'button', 'approval', 'permission', 'publish'] as const
 const route = useRoute()
 const router = useRouter()
 const tab = ref<string>('field')

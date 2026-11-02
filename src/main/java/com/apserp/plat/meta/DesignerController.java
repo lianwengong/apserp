@@ -63,12 +63,13 @@ public class DesignerController {
     private final MetaChildService childService;
     private final MetaCache metaCache;
     private final DocStatusService docStatusService;
+    private final PrintService printService;
 
     public DesignerController(RuleService ruleService, ActionService actionService,
                               ApprovalService approvalService, MetaPublishService publishService,
                               PermissionDesignService permissionDesign,
                               MetaChildService childService, MetaCache metaCache,
-                              DocStatusService docStatusService) {
+                              DocStatusService docStatusService, PrintService printService) {
         this.ruleService = ruleService;
         this.actionService = actionService;
         this.approvalService = approvalService;
@@ -77,6 +78,7 @@ public class DesignerController {
         this.childService = childService;
         this.metaCache = metaCache;
         this.docStatusService = docStatusService;
+        this.printService = printService;
     }
 
     // ---------------------------------------------------------------- 概览
@@ -85,6 +87,34 @@ public class DesignerController {
     @RequiresPermission(value = "DESIGN:publish", action = "read")
     public ApiResult<Map<String, Object>> overview() {
         return ApiResult.ok(permissionDesign.overview());
+    }
+
+    // ---------------------------------------------------------------- 打印模板
+
+    @GetMapping("/print-templates")
+    @RequiresPermission(value = "DESIGN:page", action = "read")
+    public ApiResult<List<PrintService.TemplateDto>> printTemplates(
+            @RequestParam(required = false) String objectCode) {
+        return ApiResult.ok(printService.list(objectCode));
+    }
+
+    @PostMapping("/print-templates")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Map<String, Long>> savePrintTemplate(@RequestBody PrintService.TemplateSaveRequest body) {
+        return ApiResult.ok(Map.of("id", printService.save(body)));
+    }
+
+    @DeleteMapping("/print-templates/{id}")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Void> deletePrintTemplate(@PathVariable long id) {
+        printService.delete(id);
+        return ApiResult.ok(null);
+    }
+
+    @GetMapping("/print-templates/placeholders")
+    @RequiresPermission(value = "DESIGN:page", action = "read")
+    public ApiResult<List<String>> printPlaceholders(@RequestParam String objectCode) {
+        return ApiResult.ok(printService.placeholders(objectCode));
     }
 
     // ---------------------------------------------------------------- 状态机
