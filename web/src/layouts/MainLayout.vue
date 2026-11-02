@@ -27,7 +27,7 @@ import type { SchemaGroup } from '../utils/schema'
 import { SCHEMA_GROUPS, groupOf } from '../utils/schema'
 import type { DataObjectDto } from '../api/types'
 import type { MenuNode } from '../api/menu'
-import type { TreeNavGroup, TreeNavLeaf } from '../components/treeNav'
+import type { TreeNavGroup } from '../components/treeNav'
 import { catalog } from '../stores/catalog'
 import { menus } from '../stores/menu'
 import { session } from '../stores/session'
@@ -48,7 +48,7 @@ const router = useRouter()
 // ---------------------------------------------------------------- 外观偏好（导航模式）
 
 const navMode = computed(() => appearance.state.navMode)
-/** 顶部导航用的根节点：平台管理单独放在抽屉里，其余业务菜单横排 */
+/** 顶栏导航用的根节点：平台管理单独走侧栏/图标入口，其余业务菜单横排 */
 const topNodes = computed(() => menus.state.tree.filter((node) => node.code !== '90'))
 
 function openMenuFromTop(node: MenuNode): void {
@@ -100,37 +100,49 @@ const ROOT_ICONS: Record<string, Component> = {
   '10': TrendCharts
 }
 
-/** 参考系统：把一个域的所有后代拍平成叶子，面板里用面包屑说明归属。 */
-function flattenMenuLeaves(nodes: MenuNode[], crumb: string[] = []): TreeNavLeaf[] {
-  const out: TreeNavLeaf[] = []
-  for (const node of nodes) {
-    if (node.children.length) {
-      out.push(...flattenMenuLeaves(node.children, [...crumb, node.name]))
-      continue
-    }
-    if (!node.route) continue
-    out.push({
-      key: node.code,
-      title: node.name,
-      route: node.route,
-      crumb: crumb.length ? crumb.join(' / ') : undefined,
-      node
-    })
-  }
-  return out
+const RAIL_LABELS: Record<string, string> = {
+  '01': '主数据',
+  '02': '采购',
+  '03': '销售',
+  '04': '零售',
+  '05': '营销',
+  '06': '全渠道',
+  '07': '库存',
+  '08': '运输',
+  '09': '财务',
+  '10': '计划'
 }
+
+let syntheticId = -1000
+
+function leafNode(name: string, route: string, code: string): MenuNode {
+  return {
+    id: syntheticId--,
+    parentId: null,
+    code,
+    name,
+    route,
+    icon: null,
+    menuType: 2,
+    moduleCode: null,
+    children: []
+  }
+}
+
+const workbenchNodes: MenuNode[] = [
+  leafNode('工作台首页', '/', 'home'),
+  leafNode('我的待办', '/todo', 'todo'),
+  leafNode('流程中心', '/workflow', 'workflow')
+]
 
 const treeGroups = computed<TreeNavGroup[]>(() => {
   const groups: TreeNavGroup[] = [
     {
       key: 'workbench',
       title: '工作台',
+      short: '工作台',
       icon: HomeFilled,
-      leaves: [
-        { key: 'home', title: '工作台首页', route: '/' },
-        { key: 'todo', title: '我的待办', route: '/todo' },
-        { key: 'workflow', title: '流程中心', route: '/workflow' }
-      ]
+      nodes: workbenchNodes
     }
   ]
 
@@ -138,46 +150,37 @@ const treeGroups = computed<TreeNavGroup[]>(() => {
     groups.push({
       key: 'platform',
       title: platformRoot.value.name,
+      short: '平台',
       icon: Setting,
-      leaves: flattenMenuLeaves(platformRoot.value.children)
+      nodes: platformRoot.value.children
     })
   }
 
   for (const root of menus.state.tree.filter((node) => node.code !== '90')) {
-    const leaves = root.children.length
-      ? flattenMenuLeaves(root.children)
-      : root.route
-        ? [{ key: root.code, title: root.name, route: root.route, node: root }]
-        : []
-    if (!leaves.length) continue
+    const nodes = root.children.length ? root.children : root.route ? [root] : []
+    if (!nodes.length) continue
     groups.push({
       key: root.code,
       title: root.name,
+      short: RAIL_LABELS[root.code] ?? root.name,
       icon: ROOT_ICONS[root.code] ?? Grid,
-      leaves
+      nodes
     })
   }
 
   groups.push({
     key: 'master-data',
     title: '基础资料',
+    short: '资料',
     icon: Files,
-    leaves: catalog.state.objects.map((object) => ({
-      key: `object:${object.code}`,
-      title: object.name,
-      route: `/object/${object.code}`
-    }))
+    nodes: catalog.state.objects.map((object) => leafNode(object.name, `/object/${object.code}`, object.code))
   })
 
-  return groups.filter((group) => group.leaves.length > 0)
+  return groups.filter((group) => group.nodes.length > 0)
 })
 
-function openTreeLeaf(leaf: TreeNavLeaf): void {
-  if (leaf.node) {
-    openMenu(leaf.node)
-    return
-  }
-  if (leaf.route) void router.push(leaf.route)
+function openTreeNode(node: MenuNode): void {
+  openMenu(node)
 }
 
 onMounted(async () => {
@@ -364,7 +367,7 @@ function onUserCommand(command: string): void {
       v-if="navMode === 'tree'"
       :groups="treeGroups"
       :current-path="route.path"
-      @select="openTreeLeaf"
+      @select="openTreeNode"
     />
 
     <aside

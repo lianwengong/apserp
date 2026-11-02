@@ -92,7 +92,7 @@ web/
 
 ### 外观与偏好
 
-右上角齿轮打开：主题配色、导航模式（侧边 / 树形 / 顶部）、标签栏样式、明暗、圆角、字号、界面密度。全部落到 CSS 变量与 `html[data-*]`，localStorage 持久化，刷新后保持；树形导航是“窄图标栏常驻 + 点图标弹出菜单树”，不是把菜单整块隐藏。
+右上角齿轮打开：主题配色、导航模式（侧栏 / 图标 / 顶栏）、标签栏样式、明暗、圆角、字号、界面密度。全部落到 CSS 变量与 `html[data-*]`，localStorage 持久化，刷新后保持；图标导航是“窄图标栏按域分组 + 点图标弹出叶子菜单”，不是把菜单整块隐藏。
 
 ### 生产脚本
 
@@ -167,4 +167,4 @@ web/
 - 外观持久化脚本：`tools/shot/apserp-appearance-check.mjs`，覆盖主题/密度/字号刷新后保持与恢复默认。
 - 端到端脚本：`tools/shot/apserp-web-check.mjs`，覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，控制台 0 错误。
 - 菜单脚本：`tools/shot/apserp-menu-check.mjs`；平台管理脚本：`tools/shot/apserp-admin-check.mjs`；侧边栏脚本：`tools/shot/apserp-nav-check.mjs`。
-- 展示截图：`tools/shot/apserp-dashboard-new.png`、`apserp-master-data.png`、`apserp-record-picker.png`、`apserp-dark.png`、`apserp-dark-dashboard.png`、`apserp-page-schema.png`、`apserp-remote-page.png` 等。
+- 展示截图：`tools/shot/apserp-dashboard-new.png`、`apserp-master-data.png`、`apserp-record-picker.png`、`apserp-dark.png`、`apserp-dark-dashboard.png`、`apserp-tree-rail.png`、`apserp-page-schema.png`、`apserp-remote-page.png` 等。

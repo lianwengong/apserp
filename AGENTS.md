@@ -120,6 +120,8 @@ src/test/java/com/apserp/
 | 2026-11-02 | 外观偏好只存 localStorage，换机器就回默认；「跟随系统」的明暗也没做 | 新增 `plat.UserPreference` + `/api/preference`：本地优先保证首屏、登录后拉取覆盖、修改 800ms 防抖回写；明暗拆成「选择」(`data-mode-preference`) 与「生效」(`data-mode`) 两个值，auto 用 matchMedia 判定 |
 | 2026-11-02 | 系统深浅切换后页面变了，但抽屉里的「当前系统为暗色/亮色」提示不更新 | 直接把 `matchMedia().matches` 读在模板里不会重绘：必须把它放进 `reactive`（本项目 `systemDark`），在 `change` 事件里更新，模板读响应式值 |
 | 2026-11-02 | 用 PowerShell 批量 `Replace` 改 `appearance.ts`，其中一段没匹配上却没有任何报错，导致「响应式修复」实际没落盘，排查了两轮 | 每次脚本改写后必须 `grep` 关键符号确认（本次 `systemDark` 缺失才发现），或直接用 edit 工具 |
+| 2026-11-02 | 编号规则表（20 条）只有 Sample 字符串，没取号实现，单据号靠手填；「查最大号 +1」必然并发重号 | V49 给 CodeRule 补 Prefix/DatePattern/DigitCount，新增 CodeSerial（租户+规则+期间唯一）；取号用单条 `UPDATE … WITH(UPDLOCK) OUTPUT` 自增，换期间=换行即重置，不需要定时任务 |
+| 2026-11-02 | 取号方法加 `@Transactional` 后，8 线程并发取号出现死锁受害者（CannotAcquireLockException） | 取号只依赖单条 UPDATE 的原子性，**不要开事务**（否则行锁持有到方法返回，与插入路径互等）；死锁当正常并发结果退避重试 |
 | 2026-11-02 | PageSchema 只有本地定义，远程编辑要发版；前后端两份定义容易漂移 | 新增 plat.PageSchema + /api/page-schema/{code} + 管理端页面编排（/system/pages）；保存时以表单 code/title/kind 覆盖 JSON，服务端二次校验；前端 30s 缓存、保存主动失效、远程失败回退本地 |
 
 

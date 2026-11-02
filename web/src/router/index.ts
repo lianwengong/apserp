@@ -10,6 +10,7 @@ import WorkflowCenter from '../views/WorkflowCenter.vue'
 import ModuleAdminView from '../views/system/ModuleAdminView.vue'
 import MenuAdminView from '../views/system/MenuAdminView.vue'
 import TerminalAdminView from '../views/system/TerminalAdminView.vue'
+import CodeRuleView from '../views/system/CodeRuleView.vue'
 import PageSchemaAdminView from '../views/system/PageSchemaAdminView.vue'
 import MenuPlaceholder from '../views/MenuPlaceholder.vue'
 import PlatformOverview from '../views/admin/PlatformOverview.vue'
@@ -64,6 +65,7 @@ const router = createRouter({
         { path: 'system/modules', name: 'system-modules', component: ModuleAdminView, meta: { title: '功能模块管理', cacheName: 'ModuleAdminView' } },
         { path: 'system/menus', name: 'system-menus', component: MenuAdminView, meta: { title: '菜单设置', cacheName: 'MenuAdminView' } },
         { path: 'system/terminals', name: 'system-terminals', component: TerminalAdminView, meta: { title: '终端与功能', cacheName: 'TerminalAdminView' } },
+        { path: 'system/code-rules', name: 'system-code-rules', component: CodeRuleView, meta: { title: '编号规则', cacheName: 'CodeRuleView' } },
         { path: 'system/pages', name: 'system-pages', component: PageSchemaAdminView, meta: { title: '页面编排', cacheName: 'PageSchemaAdminView' } },
         {
           path: 'm/:code',

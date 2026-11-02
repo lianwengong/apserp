@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 import { preferenceApi } from '../api/preference'
 
-/** 导航模式：侧边导航 / 树形导航（窄图标栏 + 弹出菜单树） / 顶部导航 */
+/** 导航模式：侧栏导航（完整菜单） / 图标导航（域图标 + 弹出菜单） / 顶栏导航（一级菜单横排） */
 export type NavMode = 'side' | 'tree' | 'top'
 /** 标签栏形态：经典 / 梯形书签 / 圆角卡片 / 直角复古 / 下划线 */
 export type TabStyle = 'classic' | 'trapezoid' | 'card' | 'retro' | 'underline'
@@ -86,9 +86,9 @@ export const rmbPalette: { value: number; label: string; name: string; color: st
 ]
 
 export const navModeOptions: { key: NavMode; label: string; hint: string }[] = [
-  { key: 'side', label: '侧边导航', hint: '默认，常驻左侧' },
-  { key: 'tree', label: '树形导航', hint: '窄图标栏常驻，点图标弹出菜单树' },
-  { key: 'top', label: '顶部导航', hint: '一级菜单横排，适合大屏' }
+  { key: 'side', label: '侧栏导航', hint: '完整菜单常驻左侧，可折叠' },
+  { key: 'tree', label: '图标导航', hint: '窄图标栏按域分组，点图标弹出菜单' },
+  { key: 'top', label: '顶栏导航', hint: '一级菜单横排，内容区更宽' }
 ]
 
 export const tabStyleOptions: { key: TabStyle; label: string }[] = [

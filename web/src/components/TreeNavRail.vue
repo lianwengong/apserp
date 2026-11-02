@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import type { TreeNavGroup, TreeNavLeaf } from './treeNav'
+import type { MenuNode } from '../api/menu'
+import type { TreeNavGroup } from './treeNav'
+import TreeNavPanel from './TreeNavPanel.vue'
 
 /**
- * 参考 ASWeb 的树形导航：
+ * 参考 ASWeb 的图标导航：
  * - 左侧 76px 图标轨，按“域”分组（工作台/平台管理/各业务根/基础资料）；
- * - 点某个域，右侧弹出该域下的**扁平叶子列表**（每条带所属模块面包屑）；
- * - 不再用“整块抽屉菜单”，避免点开后看不到自己在哪里。
+ * - 点某个域，右侧弹出该域的完整菜单树；
+ * - 菜单树保留多级（域 → 模块 → 功能），默认展开模块，点模块再展开功能。
  */
 defineOptions({ name: 'TreeNavRail' })
 
@@ -14,21 +16,24 @@ const props = defineProps<{
   currentPath: string
 }>()
 
-const emit = defineEmits<{ select: [leaf: TreeNavLeaf] }>()
+const emit = defineEmits<{ select: [node: MenuNode] }>()
 
 function shortTitle(title: string): string {
   return title.length > 4 ? title.slice(0, 4) : title
 }
 
-function isActive(leaf: TreeNavLeaf): boolean {
-  if (!leaf.route) return false
-  return props.currentPath === leaf.route || props.currentPath.startsWith(`${leaf.route}/`)
+function isActive(node: MenuNode): boolean {
+  if (!node.route) return false
+  return props.currentPath === node.route || props.currentPath.startsWith(`${node.route}/`)
+}
+
+function hasActive(nodes: MenuNode[]): boolean {
+  return nodes.some((node) => isActive(node) || hasActive(node.children))
 }
 
 function isGroupActive(group: TreeNavGroup): boolean {
-  return group.leaves.some(isActive)
+  return hasActive(group.nodes)
 }
-
 </script>
 
 <template>
@@ -39,7 +44,7 @@ function isGroupActive(group: TreeNavGroup): boolean {
       :key="group.key"
       placement="right-start"
       trigger="click"
-      :width="260"
+      :width="280"
       popper-class="apserp-tree-nav-popover"
     >
       <template #reference>
@@ -50,23 +55,13 @@ function isGroupActive(group: TreeNavGroup): boolean {
           :title="group.title"
         >
           <el-icon><component :is="group.icon" /></el-icon>
-          <span class="rail-label">{{ shortTitle(group.title) }}</span>
+          <span class="rail-label">{{ group.short ?? shortTitle(group.title) }}</span>
         </button>
       </template>
 
       <div class="nav-panel">
         <div class="panel-title">{{ group.title }}</div>
-        <button
-          v-for="leaf in group.leaves"
-          :key="leaf.key"
-          type="button"
-          class="panel-leaf"
-          :class="{ 'is-active': isActive(leaf) }"
-          @click="emit('select', leaf)"
-        >
-          <span class="leaf-title">{{ leaf.title }}</span>
-          <span v-if="leaf.crumb" class="leaf-crumb">{{ leaf.crumb }}</span>
-        </button>
+        <TreeNavPanel :nodes="group.nodes" :current-path="currentPath" @select="emit('select', $event)" />
       </div>
     </el-popover>
   </div>
@@ -148,51 +143,21 @@ function isGroupActive(group: TreeNavGroup): boolean {
 }
 
 .apserp-tree-nav-popover .nav-panel {
-  max-height: 62vh;
+  max-height: 66vh;
   overflow-y: auto;
   padding: 6px;
 }
 
 .apserp-tree-nav-popover .panel-title {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   padding: 7px 8px 8px;
   margin-bottom: 4px;
+  background: var(--card);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
-}
-
-.apserp-tree-nav-popover .panel-leaf {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  width: 100%;
-  padding: 7px 9px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.apserp-tree-nav-popover .panel-leaf:hover {
-  background: var(--brand-50);
-}
-
-.apserp-tree-nav-popover .panel-leaf.is-active {
-  background: var(--brand-50);
-  color: var(--brand-700);
-  font-weight: 600;
-}
-
-.apserp-tree-nav-popover .leaf-title {
-  font-size: 13px;
-}
-
-.apserp-tree-nav-popover .leaf-crumb {
-  color: var(--muted);
-  font-size: 11px;
 }
 </style>
