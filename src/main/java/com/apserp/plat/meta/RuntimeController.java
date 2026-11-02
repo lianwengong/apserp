@@ -44,6 +44,7 @@ public class RuntimeController {
     private final ActionExecutor actionExecutor;
     private final MetaOverlay metaOverlay;
     private final DocStatusService docStatusService;
+    private final AttachmentService attachmentService;
     private final MetaPublishService publishService;
     private final PermissionService permissionService;
 
@@ -51,7 +52,7 @@ public class RuntimeController {
                              MetaQueryService queryService, MetaChildService childService,
                              ActionExecutor actionExecutor, MetaOverlay metaOverlay,
                              MetaPublishService publishService, DocStatusService docStatusService,
-                             PermissionService permissionService) {
+                             AttachmentService attachmentService, PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
@@ -60,6 +61,7 @@ public class RuntimeController {
         this.metaOverlay = metaOverlay;
         this.publishService = publishService;
         this.docStatusService = docStatusService;
+        this.attachmentService = attachmentService;
         this.permissionService = permissionService;
     }
 
@@ -155,6 +157,59 @@ public class RuntimeController {
                 .header("Content-Type", "text/csv; charset=UTF-8")
                 .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
                 .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    // ---------------------------------------------------------------- 附件
+
+    /** 某单据的附件列表。 */
+    @GetMapping("/attachments")
+    public ApiResult<List<AttachmentService.AttachmentDto>> attachments(@RequestParam String objectCode,
+                                                                      @RequestParam long businessId) {
+        requireRead(objectCode);
+        return ApiResult.ok(attachmentService.list(objectCode, businessId));
+    }
+
+    @PostMapping("/attachments")
+    public ApiResult<AttachmentService.AttachmentDto> uploadAttachment(
+            @RequestParam String objectCode,
+            @RequestParam long businessId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        requireWrite(objectCode);
+        return ApiResult.ok(attachmentService.upload(objectCode, businessId, file));
+    }
+
+    @GetMapping("/attachments/{id}/download")
+    public org.springframework.http.ResponseEntity<org.springframework.core.io.Resource> downloadAttachment(
+            @PathVariable long id) {
+        AttachmentService.AttachmentDto dto = attachmentService.get(id);
+        requireRead(dto.objectCode());
+        AttachmentService.Download download = attachmentService.download(id);
+        String encoded = java.net.URLEncoder.encode(download.fileName(),
+                java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20");
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Disposition",
+                        "attachment; filename=\"file\"; filename*=UTF-8''" + encoded)
+                .body(download.resource());
+    }
+
+    @DeleteMapping("/attachments/{id}")
+    public ApiResult<Void> deleteAttachment(@PathVariable long id) {
+        AttachmentService.AttachmentDto dto = attachmentService.get(id);
+        requireWrite(dto.objectCode());
+        attachmentService.delete(id);
+        return ApiResult.ok(null);
+    }
+
+    private void requireRead(String objectCode) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
+    }
+
+    private void requireWrite(String objectCode) {
+        if (!permissionService.check("DATA:" + objectCode, "write")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的写入权限：" + objectCode);
+        }
     }
 
     // ---------------------------------------------------------------- 状态机

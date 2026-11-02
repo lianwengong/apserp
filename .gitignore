@@ -9,3 +9,6 @@ web/node_modules/
 web/.npm-cache/
 web/dist/
 web/node_modules
+
+# 附件落盘目录（本地运行产物，不入库）
+data/

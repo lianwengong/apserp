@@ -27,6 +27,11 @@ spring:
     redis:
       host: localhost
       port: 6379
+  servlet:
+    multipart:
+      # 附件上传：单文件 12MB 上限（业务限制见 app.attachment.max-size-mb）
+      max-file-size: 12MB
+      max-request-size: 14MB
 
 management:
   endpoints:
@@ -53,3 +58,7 @@ app:
   security:
     # 仅开发环境允许用 X-Tenant-Id 请求头，生产必须关闭
     allow-header-auth: true
+  attachment:
+    # 附件落盘目录（相对工作目录）；换对象存储时只改 AttachmentService 的 store
+    dir: ./data/attachments
+    max-size-mb: 10

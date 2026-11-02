@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import ChildTables from './ChildTables.vue'
+import AttachmentPanel from './AttachmentPanel.vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import type {
   DataObjectDto,
@@ -440,6 +441,14 @@ watch(
       v-model="childRows"
       :object-code="object.code"
       :parent-id="parentId"
+    />
+
+    <!-- 附件只在编辑已有单据时出现：新建时还没有主键，附件无处可挂 -->
+    <AttachmentPanel
+      v-if="object && parentId"
+      :key="`att-${object.code}-${parentId}`"
+      :object-code="object.code"
+      :business-id="parentId"
     />
 
     <template #footer>
