@@ -123,6 +123,7 @@ src/test/java/com/apserp/
 | 2026-11-02 | 编号规则表（20 条）只有 Sample 字符串，没取号实现，单据号靠手填；「查最大号 +1」必然并发重号 | V49 给 CodeRule 补 Prefix/DatePattern/DigitCount，新增 CodeSerial（租户+规则+期间唯一）；取号用单条 `UPDATE … WITH(UPDLOCK) OUTPUT` 自增，换期间=换行即重置，不需要定时任务 |
 | 2026-11-02 | 取号方法加 `@Transactional` 后，8 线程并发取号出现死锁受害者（CannotAcquireLockException） | 取号只依赖单条 UPDATE 的原子性，**不要开事务**（否则行锁持有到方法返回，与插入路径互等）；死锁当正常并发结果退避重试 |
 | 2026-11-02 | PageSchema 只有本地定义，远程编辑要发版；前后端两份定义容易漂移 | 新增 plat.PageSchema + /api/page-schema/{code} + 管理端页面编排（/system/pages）；保存时以表单 code/title/kind 覆盖 JSON，服务端二次校验；前端 30s 缓存、保存主动失效、远程失败回退本地 |
+| 2026-11-02 | 开发机快照回滚后源码目录消失、`APSErpV3`/`APSErpV3_TEST` 变成「文件还在但库不在 sys.databases」的游离 .mdf；直接 CREATE 报「文件已存在」，ATTACH 又报「操作系统错误 5（拒绝访问）」（当前用户无 DATA 目录权限） | 源码从 Gitee 重新 clone（GitHub 当时 TCP 通但 clone 报 curl 52）；数据库改用临时名建库再 MODIFY NAME 改名成目标名（`tools/ci-db-reset.ps1` 已内置），绕开游离文件；迁移从空库重放 49 个版本即可恢复全部结构与种子 |
 
 
 

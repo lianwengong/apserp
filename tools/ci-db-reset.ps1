@@ -22,8 +22,15 @@ if ($Drop) {
 }
 
 Write-Host "create $TestDb ..."
-& $sqlcmd -S $Server -E -b -Q "IF DB_ID(N'$TestDb') IS NULL CREATE DATABASE [$TestDb] COLLATE Chinese_PRC_CI_AS"
+# 用「临时名建库 → 改名」而不是直接 CREATE DATABASE [$TestDb]：
+# 有些机器上客户端自己的 DATA 目录里残留着同名的 .mdf/.ldf（旧快照、权限又读不到），
+# 直接建会报「文件已存在」，临时名建库用的是新文件名，不撞车。
+$staging = "${TestDb}_init$([DateTime]::UtcNow.ToString('HHmmss'))"
+& $sqlcmd -S $Server -E -b -Q "IF DB_ID(N'$staging') IS NOT NULL DROP DATABASE [$staging]"
+& $sqlcmd -S $Server -E -b -Q "CREATE DATABASE [$staging] COLLATE Chinese_PRC_CI_AS"
 if ($LASTEXITCODE -ne 0) { throw 'create test db failed' }
+& $sqlcmd -S $Server -E -b -Q "ALTER DATABASE [$staging] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; ALTER DATABASE [$staging] MODIFY NAME = [$TestDb]; ALTER DATABASE [$TestDb] SET MULTI_USER"
+if ($LASTEXITCODE -ne 0) { throw 'rename test db failed' }
 
 Write-Host "grant $AppUser ..."
 $grant = "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$AppUser') CREATE USER [$AppUser] FOR LOGIN [$AppUser]; " +
