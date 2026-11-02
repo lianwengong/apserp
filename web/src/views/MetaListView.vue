@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Close, Download, Filter, Plus, Refresh, Search, Setting } from '@element-plus/icons-vue'
 import { ApiError } from '../api/http'
@@ -27,6 +27,8 @@ import ActionBar from '../components/ActionBar.vue'
 import ApprovalPanel from '../components/ApprovalPanel.vue'
 import { runtimeApi, type DocStatusDefine } from '../api/runtime'
 
+defineOptions({ name: 'MetaListView' })
+
 type ViewState = 'loading' | 'ready' | 'denied' | 'missing' | 'error'
 
 /** 没有列表视图时，系统列不进默认列（Id 除外，行标识仍会随数据返回）。 */
@@ -42,12 +44,11 @@ const OPERATORS: { value: FilterOp; label: string }[] = [
   { value: 'lte', label: '小于等于' }
 ]
 
-const route = useRoute()
 const router = useRouter()
+const props = defineProps<{ objectCode?: string }>()
 
-const code = computed(() => (typeof route.params.code === 'string' ? route.params.code : ''))
-/** 数据对象编码：模板里多处引用（元数据接口、按钮与审批组件的入参）。 */
-const objectCode = computed(() => code.value)
+/** 数据对象编码：只从宿主传入，避免 keep-alive 旧实例跟着全局路由变化重新查询。 */
+const code = computed(() => props.objectCode ?? '')
 
 const viewState = ref<ViewState>('loading')
 const errorText = ref('')
@@ -764,7 +765,7 @@ function retry(): void {
           <el-table-column label="操作" width="220" fixed="right" align="center">
             <template #default="{ row }">
               <ActionBar
-                :object-code="objectCode"
+                :object-code="code"
                 :row="row"
                 @open-form="openEdit"
                 @refresh="reload"
@@ -813,7 +814,7 @@ function retry(): void {
 
     <ApprovalPanel
       v-model="approvalVisible"
-      :object-code="objectCode"
+      :object-code="code"
       :business-id="approvalBusinessId"
       @changed="reload"
     />

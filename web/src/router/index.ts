@@ -1,14 +1,16 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import MainLayout from '../layouts/MainLayout.vue'
-import HomeView from '../views/HomeView.vue'
+import DashboardView from '../views/DashboardView.vue'
 import LoginView from '../views/LoginView.vue'
-import MetaListView from '../views/MetaListView.vue'
+import ObjectPageView from '../views/ObjectPageView.vue'
+import PageView from '../views/PageView.vue'
 import DesignerView from '../views/design/DesignerView.vue'
 import TodoView from '../views/TodoView.vue'
 import WorkflowCenter from '../views/WorkflowCenter.vue'
 import ModuleAdminView from '../views/system/ModuleAdminView.vue'
 import MenuAdminView from '../views/system/MenuAdminView.vue'
 import TerminalAdminView from '../views/system/TerminalAdminView.vue'
+import PageSchemaAdminView from '../views/system/PageSchemaAdminView.vue'
 import MenuPlaceholder from '../views/MenuPlaceholder.vue'
 import PlatformOverview from '../views/admin/PlatformOverview.vue'
 import TenantListView from '../views/admin/TenantListView.vue'
@@ -22,6 +24,8 @@ declare module 'vue-router' {
     /** 免登录页面（仅登录页） */
     public?: boolean
     title?: string
+    /** keep-alive 的组件名；有值才缓存 */
+    cacheName?: string
   }
 }
 
@@ -39,42 +43,51 @@ const router = createRouter({
       path: '/',
       component: MainLayout,
       children: [
-        { path: '', name: 'home', component: HomeView, meta: { title: '工作台' } },
+        { path: '', name: 'home', component: DashboardView, meta: { title: '工作台', cacheName: 'DashboardView' } },
         {
           path: 'object/:code',
           name: 'object',
-          component: MetaListView,
-          meta: { title: '数据列表' }
+          component: ObjectPageView,
+          props: (route) => ({ code: String(route.params.code ?? '') }),
+          meta: { title: '数据列表', cacheName: 'ObjectPageView' }
         },
-        { path: 'design', name: 'design', component: DesignerView, meta: { title: '设计器中心' } },
-        { path: 'todo', name: 'todo', component: TodoView, meta: { title: '我的待办' } },
-        { path: 'workflow', name: 'workflow', component: WorkflowCenter, meta: { title: '流程中心' } },
-        { path: 'system/modules', name: 'system-modules', component: ModuleAdminView, meta: { title: '功能模块管理' } },
-        { path: 'system/menus', name: 'system-menus', component: MenuAdminView, meta: { title: '菜单设置' } },
-        { path: 'system/terminals', name: 'system-terminals', component: TerminalAdminView, meta: { title: '终端与功能' } },
+        {
+          path: 'page/:code',
+          name: 'page',
+          component: PageView,
+          props: (route) => ({ code: String(route.params.code ?? '') }),
+          meta: { title: '业务页面', cacheName: 'PageView' }
+        },
+        { path: 'design', name: 'design', component: DesignerView, meta: { title: '设计器中心', cacheName: 'DesignerView' } },
+        { path: 'todo', name: 'todo', component: TodoView, meta: { title: '我的待办', cacheName: 'TodoView' } },
+        { path: 'workflow', name: 'workflow', component: WorkflowCenter, meta: { title: '流程中心', cacheName: 'WorkflowCenter' } },
+        { path: 'system/modules', name: 'system-modules', component: ModuleAdminView, meta: { title: '功能模块管理', cacheName: 'ModuleAdminView' } },
+        { path: 'system/menus', name: 'system-menus', component: MenuAdminView, meta: { title: '菜单设置', cacheName: 'MenuAdminView' } },
+        { path: 'system/terminals', name: 'system-terminals', component: TerminalAdminView, meta: { title: '终端与功能', cacheName: 'TerminalAdminView' } },
+        { path: 'system/pages', name: 'system-pages', component: PageSchemaAdminView, meta: { title: '页面编排', cacheName: 'PageSchemaAdminView' } },
         {
           path: 'm/:code',
           name: 'menu-page',
           component: MenuPlaceholder,
-          meta: { title: '功能页面' }
+          meta: { title: '功能页面', cacheName: 'MenuPlaceholder' }
         },
         {
           path: 'admin',
           name: 'platform-overview',
           component: PlatformOverview,
-          meta: { title: '平台概览' }
+          meta: { title: '平台概览', cacheName: 'PlatformOverview' }
         },
         {
           path: 'admin/tenants',
           name: 'platform-tenants',
           component: TenantListView,
-          meta: { title: '租户管理' }
+          meta: { title: '租户管理', cacheName: 'TenantListView' }
         },
         {
           path: 'admin/menus',
           name: 'platform-menus',
           component: MenuOverviewView,
-          meta: { title: '菜单总览' }
+          meta: { title: '菜单总览', cacheName: 'MenuOverviewView' }
         },
         { path: '403', name: 'forbidden', component: ForbiddenView, meta: { title: '无访问权限' } },
         {

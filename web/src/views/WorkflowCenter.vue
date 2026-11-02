@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'WorkflowCenter' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {

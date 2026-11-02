@@ -111,7 +111,13 @@ src/test/java/com/apserp/
 | 2026-11-02 | 菜单「上移/下移」不是简单 `Sort-10`：并发或跳跃时会与兄弟重排、甚至把 Sort 算成负数 | 交换两个兄弟的 Sort（各发一次 move），服务端只校验父节点与成环；不要在前端推算排序值 |
 | 2026-11-02 | 「模块 vs 菜单 vs 终端 vs 子系统」四者关系靠口口相传：模块 636 条与菜单 636 条 1:1 双写、`ModuleTerminal` 空表却有 1058 条菜单终端、41 条平台菜单不绑模块 | 关系与实测数字整理进 `docs/model-module-subsystem-menu-terminal.md`；新增 `GET /api/admin/modules/model-map` 暴露规模与「未接通」警告（未绑模块 / 占位页 / 空表），管理窗口顶部直接显示，避免再靠人查表 |
 | 2026-11-02 | 侧边栏同时有硬编码「平台」组和「功能菜单 → 平台管理」，平台树根又和组标题重复，看起来像两套平台入口 | 重组为「工作台 / 平台管理 / 业务菜单 / 基础资料」四组；平台组直接渲染子模块；流程中心/待办归工作台；模块管理、菜单设置指向 `/system/modules`、`/system/menus`；01 根改名「主数据」（V39/V40） |
-
+| 2026-11-02 | 用 PowerShell Get-Content -Raw + Set-Content 修改含中文的 Vue 文件，会把整文件按错误编码重写：中文乱码、BOM、模板字符串截断（MetaListView 被破坏，tsc 报 Unterminated string literal） | 改源码只用 read/edit/write 工具；已损坏文件可从 .git/index 找 blob（Python zlib 解压）恢复。不要用 PowerShell 文本管道改 Vue/TS 源码 |
+| 2026-11-02 | keep-alive 下多个列表页实例同时存活，组件里直接读 route.params.code：切到新路由时隐藏的旧页签也跟着重新查询（/page/master-data 被当成数据对象，4 个 400） | 路由用 props 把 code 固定注入页面组件（ObjectPageView / PageView）；列表组件只认 prop，不读全局 route |
+| 2026-11-02 | 页面组合全靠每个业务页手写，列表/主从/页签/看板各一套；菜单仍大量落 /m/:code 占位 | 新增前端 PageSchema（schema/types/registry/pages）+ PageView/PageTabs/Dashboard；V43 把基础资料中心、品牌、供应商、客户绑到真实路由；V44/V45 补品牌联系人 → 品牌参照选择（RecordPicker） |
+| 2026-11-02 | 外观偏好只有 4 套主题 + 字号 + 明暗，「导航模式 / 标签栏形态 / 圆角 / 人民币色系」都缺；且主题色是手写 CSS 变量，加一套要改 9 个变量 | 主题只存「主色 + 名称」，色阶在 `stores/appearance.ts` 里由主色混合推导并写成内联 CSS 变量；导航/标签/圆角/字号全部落 `html[data-*]`，CSS 只认 data 属性 |
+| 2026-11-02 | 梯形书签用 `::before { z-index: -1 }` 做背景，被父容器底色盖住，标签栏看起来完全没变化（截图对比才发现） | 伪元素做背景时 z-index 至少 0，并给子元素 `position: relative; z-index: 1`；样式改动必须截图对比，不能只看 class 是否存在 |
+| 2026-11-02 | Vite dev 报「Failed to resolve import … Does the file exist?」，但 `npm run build` 通过、文件也真实存在 | 这是 dev server 在文件创建瞬间的**陈旧模块状态**，不是代码问题：重启 `npm run dev` 即可。判断标准是 build 是否通过 |
+| 2026-11-02 | PageSchema 只有本地定义，远程编辑要发版；前后端两份定义容易漂移 | 新增 plat.PageSchema + /api/page-schema/{code} + 管理端页面编排（/system/pages）；保存时以表单 code/title/kind 覆盖 JSON，服务端二次校验；前端 30s 缓存、保存主动失效、远程失败回退本地 |
 
 
 

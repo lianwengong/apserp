@@ -50,6 +50,196 @@
   --el-font-family: "Inter", "PingFang SC", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
 }
 
+/* ---------------------------------------------------------------- 外观主题 */
+
+html[data-theme='blue'] {
+  --brand-900: #0c2d4a;
+  --brand-700: #1d4f7a;
+  --brand: #2563a8;
+  --brand-400: #5489c4;
+  --brand-100: #dce9f7;
+  --brand-50: #eef5fc;
+  --el-color-primary: #2563a8;
+  --el-color-primary-light-3: #5489c4;
+  --el-color-primary-light-5: #8bb0d8;
+  --el-color-primary-light-7: #bdd3e9;
+  --el-color-primary-light-8: #d5e3f2;
+  --el-color-primary-light-9: #eef5fc;
+  --el-color-primary-dark-2: #1d4f7a;
+}
+
+html[data-theme='violet'] {
+  --brand-900: #2b1c4d;
+  --brand-700: #4a2f80;
+  --brand: #6d4bb5;
+  --brand-400: #8f73c9;
+  --brand-100: #e8e1f7;
+  --brand-50: #f4f0fc;
+  --el-color-primary: #6d4bb5;
+  --el-color-primary-light-3: #8f73c9;
+  --el-color-primary-light-5: #b1a0dc;
+  --el-color-primary-light-7: #d2c8ed;
+  --el-color-primary-light-8: #e1daf4;
+  --el-color-primary-light-9: #f4f0fc;
+  --el-color-primary-dark-2: #4a2f80;
+}
+
+html[data-theme='slate'] {
+  --brand-900: #1c252e;
+  --brand-700: #34424f;
+  --brand: #425466;
+  --brand-400: #6f8296;
+  --brand-100: #e2e7ec;
+  --brand-50: #f0f3f6;
+  --el-color-primary: #425466;
+  --el-color-primary-light-3: #6f8296;
+  --el-color-primary-light-5: #96a5b4;
+  --el-color-primary-light-7: #bdc7d1;
+  --el-color-primary-light-8: #d3dae1;
+  --el-color-primary-light-9: #f0f3f6;
+  --el-color-primary-dark-2: #34424f;
+}
+
+html[data-mode='dark'] {
+  color-scheme: dark;
+  --ink: #e6edf5;
+  --ink-2: #b9c6d4;
+  --muted: #8494a6;
+  --line: #263241;
+  --line-strong: #334255;
+  --bg: #0f151d;
+  --card: #151e28;
+  --sidebar: #0b1118;
+  --sidebar-text: #aebccb;
+  --sidebar-hover: #17222e;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 26px rgba(0, 0, 0, 0.35);
+
+  --el-text-color-primary: #e6edf5;
+  --el-text-color-regular: #b9c6d4;
+  --el-text-color-secondary: #8494a6;
+  --el-border-color: #2b3949;
+  --el-border-color-light: #263241;
+  --el-border-color-lighter: #1f2a37;
+  --el-fill-color-blank: #151e28;
+  --el-fill-color-light: #1b2632;
+  --el-bg-color-page: #0f151d;
+  --el-bg-color: #151e28;
+  --el-bg-color-overlay: #1b2632;
+  --el-table-header-bg-color: #1a2531;
+  --el-table-row-hover-bg-color: #1e2c3a;
+}
+
+html[data-mode='dark'] body {
+  background: var(--bg);
+  color: var(--ink);
+}
+
+html[data-mode='dark'] .card {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+html[data-mode='dark'] .el-breadcrumb__inner,
+html[data-mode='dark'] .el-breadcrumb__separator {
+  color: #9fb0c2;
+}
+
+html[data-mode='dark'] .el-tabs__item {
+  color: #9fb0c2;
+}
+
+html[data-mode='dark'] .el-tabs__item.is-active {
+  color: #7fd3b0;
+}
+
+html[data-mode='dark'] .el-tab-pane {
+  background: var(--card);
+}
+
+/* 主框架自绘容器：组件 scoped 样式里的浅色背景需要在全局层覆盖 */
+html[data-mode='dark'] .topbar {
+  background: #111a24 !important;
+  border-bottom-color: var(--line);
+  color: #c9d6e3;
+}
+
+html[data-mode='dark'] .tabs {
+  background: #111a24 !important;
+  border-bottom-color: var(--line);
+}
+
+html[data-mode='dark'] .tabs-card .tab,
+html[data-mode='dark'] .tabs-retro .tab {
+  background: #1b2632 !important;
+  border-color: #2b3949 !important;
+  color: #b9c6d4 !important;
+}
+
+html[data-mode='dark'] .tabs-card .tab.active {
+  background: var(--brand) !important;
+  border-color: var(--brand) !important;
+  color: #fff !important;
+}
+
+html[data-mode='dark'] .tabs-trapezoid .tab::before {
+  background: #1b2632;
+}
+
+html[data-mode='dark'] .tabs-trapezoid .tab.active::before {
+  background: #22303f;
+}
+
+html[data-mode='dark'] .tab {
+  color: #9fb0c2;
+}
+
+html[data-mode='dark'] .tab:hover {
+  background: #1b2632;
+}
+
+html[data-mode='dark'] .tab.active {
+  background: #1b2632;
+  border-color: #2b3949;
+  color: #7fd3b0;
+}
+
+html[data-mode='dark'] .tab-more,
+html[data-mode='dark'] .icon-btn {
+  color: #9fb0c2;
+}
+
+html[data-mode='dark'] .tab-more:hover,
+html[data-mode='dark'] .icon-btn:hover {
+  background: #1b2632;
+  color: #7fd3b0;
+}
+
+html[data-density='compact'] .el-table .el-table__cell {
+  padding: 4px 0;
+}
+
+html[data-density='compact'] .el-table th.el-table__cell {
+  height: 34px;
+}
+
+html[data-density='comfortable'] .el-table .el-table__cell {
+  padding: 11px 0;
+}
+
+html[data-density='comfortable'] .el-table th.el-table__cell {
+  height: 48px;
+}
+
+html[data-density='compact'] .menu-item {
+  height: 30px;
+}
+
+/* 字号由外观偏好写入 --app-font-size（标准 13 / 大 14 / 特大 16） */
+body {
+  font-size: var(--app-font-size, 13px);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -63,7 +253,7 @@ body,
 
 body {
   font-family: var(--el-font-family);
-  font-size: 13px;
+  font-size: var(--app-font-size, 13px);
   color: var(--ink);
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
@@ -148,7 +338,7 @@ h4 {
   --el-table-header-bg-color: #f6f8fb;
   --el-table-header-text-color: #4a5b6d;
   --el-table-row-hover-bg-color: #f2f8f5;
-  font-size: 13px;
+  font-size: var(--app-font-size, 13px);
 }
 
 .el-table th.el-table__cell {
@@ -218,7 +408,7 @@ h4 {
 }
 
 .el-dropdown-menu__item {
-  font-size: 13px;
+  font-size: var(--app-font-size, 13px);
 }
 
 .el-breadcrumb__inner,

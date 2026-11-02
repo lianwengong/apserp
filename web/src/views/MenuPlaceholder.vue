@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'MenuPlaceholder' })
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Promotion } from '@element-plus/icons-vue'

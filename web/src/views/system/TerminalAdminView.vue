@@ -88,6 +88,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'TerminalAdminView' })
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {

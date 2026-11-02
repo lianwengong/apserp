@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'TodoView' })
 import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { runtimeApi, type ApprovalInstance, type ApprovalTask } from '../api/runtime'

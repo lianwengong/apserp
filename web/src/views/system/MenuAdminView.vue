@@ -250,6 +250,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'MenuAdminView' })
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {

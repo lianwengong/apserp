@@ -21,19 +21,35 @@ import { menus } from '../stores/menu'
 import { session } from '../stores/session'
 import { filterMenuTree, findMenuName } from '../utils/menu'
 import MenuTree from '../components/MenuTree.vue'
+import AppearanceDrawer from '../components/AppearanceDrawer.vue'
+import TopNav from '../components/TopNav.vue'
+import { appearance } from '../stores/appearance'
+import { tabsStore, type TabItem } from '../stores/tabs'
+import { resolvePage } from '../schema/registry'
 import { runtimeApi } from '../api/runtime'
-
-interface TabItem {
-  key: string
-  label: string
-  /** 数据对象 tab 存对象编码，标题随目录加载实时取中文名 */
-  code?: string
-  closable: boolean
-}
 
 const metaVersion = ref<{ version: number; gray: boolean }>({ version: 0, gray: false })
 const route = useRoute()
 const router = useRouter()
+
+// ---------------------------------------------------------------- 外观偏好（导航模式）
+
+const navMode = computed(() => appearance.state.navMode)
+const menuDrawer = ref(false)
+/** 顶部导航用的根节点：平台管理单独放在抽屉里，其余业务菜单横排 */
+const topNodes = computed(() => menus.state.tree.filter((node) => node.code !== '90'))
+
+function openMenuFromTop(node: MenuNode): void {
+  openMenu(node)
+}
+
+/** 路由变化后收起弹窗树（含点侧边栏里的普通链接） */
+watch(
+  () => route.fullPath,
+  () => {
+    menuDrawer.value = false
+  }
+)
 
 // ---------------------------------------------------------------- 侧边栏
 
@@ -79,24 +95,9 @@ onMounted(async () => {
 
 // ---------------------------------------------------------------- 标签页
 
-function readTabs(): TabItem[] {
-  try {
-    const raw = sessionStorage.getItem('apserp.tabs')
-    if (raw) {
-      const parsed = JSON.parse(raw) as TabItem[]
-      if (Array.isArray(parsed) && parsed.some((tab) => tab.key === '/')) return parsed
-    }
-  } catch {
-    // 缓存损坏就回默认，不影响进入系统
-  }
-  return [{ key: '/', label: '工作台', closable: false }]
-}
-
-const tabs = ref<TabItem[]>(readTabs())
-
-function saveTabs(): void {
-  sessionStorage.setItem('apserp.tabs', JSON.stringify(tabs.value))
-}
+const tabs = computed(() => tabsStore.state.tabs)
+const cached = computed(() => tabsStore.state.cached)
+const appearanceVisible = ref(false)
 
 function currentCode(): string {
   return typeof route.params.code === 'string' ? route.params.code : ''
@@ -110,6 +111,7 @@ function menuName(): string {
 }
 
 function openMenu(node: MenuNode): void {
+  menuDrawer.value = false
   const target = node.route
   if (!target) return
   if (target.startsWith('/m/')) {
@@ -140,28 +142,47 @@ function labelOf(tab: TabItem): string {
 }
 
 function ensureTab(): void {
-  if (route.name === 'home') return
+  if (route.name === 'forbidden' || route.name === 'not-found') return
+  if (route.name === 'home') {
+    tabsStore.add({ key: '/', label: '工作台', closable: false, cacheName: 'DashboardView' })
+    return
+  }
   if (route.name === 'object') {
     const code = currentCode()
     if (!code) return
-    const existing = tabs.value.find((tab) => tab.key === route.path)
-    if (existing) existing.code = code
-    else tabs.value.push({ key: route.path, label: code, code, closable: true })
-    saveTabs()
+    tabsStore.add({
+      key: route.path,
+      label: code,
+      code,
+      closable: true,
+      cacheName: 'ObjectPageView'
+    })
+    return
+  }
+  if (route.name === 'page') {
+    tabsStore.add({
+      key: route.path,
+      label: resolvePage(currentCode())?.title ?? route.meta.title ?? '业务页面',
+      closable: true,
+      cacheName: 'PageView'
+    })
     return
   }
   if (route.name === 'menu-page') {
-    const existing = tabs.value.find((tab) => tab.key === route.path)
-    if (existing) existing.label = menuName()
-    else tabs.value.push({ key: route.path, label: menuName(), closable: true })
-    saveTabs()
+    tabsStore.add({
+      key: route.path,
+      label: menuName(),
+      closable: true,
+      cacheName: 'MenuPlaceholder'
+    })
     return
   }
-  if (route.name === 'forbidden' || route.name === 'not-found') return
-  if (!tabs.value.some((tab) => tab.key === route.path)) {
-    tabs.value.push({ key: route.path, label: route.meta.title ?? '页面', closable: true })
-    saveTabs()
-  }
+  tabsStore.add({
+    key: route.path,
+    label: route.meta.title ?? '页面',
+    closable: true,
+    cacheName: route.meta.cacheName
+  })
 }
 
 watch(() => route.fullPath, ensureTab, { immediate: true })
@@ -179,13 +200,18 @@ function openTab(tab: TabItem): void {
 }
 
 function closeTab(tab: TabItem): void {
-  if (!tab.closable) return
-  const index = tabs.value.findIndex((item) => item.key === tab.key)
-  tabs.value = tabs.value.filter((item) => item.key !== tab.key)
-  saveTabs()
-  if (tab.key === route.path) {
-    const next = tabs.value[Math.max(index - 1, 0)] ?? tabs.value[0]
-    void router.push(next ? next.key : '/')
+  const next = tabsStore.remove(tab.key)
+  if (!next) return
+  if (tab.key === route.path) void router.push(next)
+}
+
+function onTabCommand(command: string): void {
+  if (command === 'others') {
+    tabsStore.removeOthers(route.path)
+    return
+  }
+  if (command === 'all') {
+    void router.push(tabsStore.closeAll())
   }
 }
 
@@ -204,6 +230,10 @@ const breadcrumb = computed<{ label: string; to?: string }[]>(() => {
   }
   if (route.name === 'menu-page') {
     return [{ label: '工作台', to: '/' }, { label: '功能菜单' }, { label: menuName() }]
+  }
+  if (route.name === 'page') {
+    const tab = tabsStore.state.tabs.find((item) => item.key === route.path)
+    return [{ label: '工作台', to: '/' }, { label: '业务页面' }, { label: tab?.label ?? '页面' }]
   }
   if (route.path.startsWith('/admin')) {
     return [
@@ -231,8 +261,17 @@ function onUserCommand(command: string): void {
 </script>
 
 <template>
-  <div class="shell">
-    <aside class="sidebar" :class="{ 'is-collapsed': collapsed }">
+  <div class="shell" :data-nav="navMode">
+    <div
+      v-if="navMode === 'tree' && menuDrawer"
+      class="nav-backdrop"
+      @click="menuDrawer = false"
+    />
+    <aside
+      v-show="navMode === 'side' || (navMode === 'tree' && menuDrawer)"
+      class="sidebar"
+      :class="{ 'is-collapsed': collapsed, 'is-overlay': navMode === 'tree' }"
+    >
       <div class="brand">
         <div class="logo">APS</div>
         <div v-if="!collapsed" class="brand-text">
@@ -368,6 +407,7 @@ function onUserCommand(command: string): void {
     <div class="workspace">
       <header class="topbar">
         <el-button
+          v-if="navMode === 'side'"
           text
           circle
           class="collapse-btn"
@@ -378,6 +418,16 @@ function onUserCommand(command: string): void {
             <Expand v-if="collapsed" />
             <Fold v-else />
           </el-icon>
+        </el-button>
+        <el-button
+          v-if="navMode === 'tree'"
+          text
+          class="nav-open-btn"
+          title="打开菜单树"
+          @click="menuDrawer = true"
+        >
+          <el-icon><Grid /></el-icon>
+          <span>菜单</span>
         </el-button>
 
         <el-breadcrumb separator="/">
@@ -396,6 +446,12 @@ function onUserCommand(command: string): void {
         <el-tag v-if="user" size="small" effect="plain" class="tenant-tag">
           {{ user.tenantCode }}
         </el-tag>
+
+        <el-tooltip content="外观与偏好" placement="bottom">
+          <button type="button" class="icon-btn" aria-label="外观与偏好" @click="appearanceVisible = true">
+            <el-icon><Setting /></el-icon>
+          </button>
+        </el-tooltip>
 
         <el-dropdown trigger="click" @command="onUserCommand">
           <button class="user-chip" type="button">
@@ -422,30 +478,51 @@ function onUserCommand(command: string): void {
         </el-dropdown>
       </header>
 
-      <div class="tabs">
-        <button
-          v-for="tab in tabs"
-          :key="tab.key"
-          type="button"
-          class="tab"
-          :class="{ active: tab.key === activeKey }"
-          @click="openTab(tab)"
-        >
-          <el-icon class="tab-icon">
-            <HomeFilled v-if="!tab.closable" />
-            <Grid v-else />
-          </el-icon>
-          <span class="tab-label">{{ labelOf(tab) }}</span>
-          <el-icon v-if="tab.closable" class="tab-close" @click.stop="closeTab(tab)">
-            <Close />
-          </el-icon>
-        </button>
+      <TopNav v-if="navMode === 'top'" :nodes="topNodes" :current="route.path" @select="openMenuFromTop" />
+
+      <div class="tabs" :class="`tabs-${appearance.state.tabStyle}`">
+        <div class="tabs-list">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            type="button"
+            class="tab"
+            :class="{ active: tab.key === activeKey }"
+            @click="openTab(tab)"
+          >
+            <el-icon class="tab-icon">
+              <HomeFilled v-if="!tab.closable" />
+              <Grid v-else />
+            </el-icon>
+            <span class="tab-label">{{ labelOf(tab) }}</span>
+            <el-icon v-if="tab.closable" class="tab-close" @click.stop="closeTab(tab)">
+              <Close />
+            </el-icon>
+          </button>
+        </div>
+        <el-dropdown trigger="click" @command="onTabCommand">
+          <button type="button" class="tab-more" aria-label="页签操作">
+            <el-icon><ArrowDown /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="others">关闭其他</el-dropdown-item>
+              <el-dropdown-item command="all">关闭全部</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
 
       <main class="content">
-        <router-view />
+        <router-view v-slot="{ Component, route: current }">
+          <keep-alive :include="cached" :max="16">
+            <component :is="Component" :key="current.path" />
+          </keep-alive>
+        </router-view>
       </main>
     </div>
+
+    <AppearanceDrawer v-model="appearanceVisible" />
   </div>
 </template>
 
@@ -472,6 +549,32 @@ function onUserCommand(command: string): void {
 .sidebar.is-collapsed {
   width: 64px;
 }
+
+/* 弹窗树形：同一份菜单做成浮层，避免两套导航代码 */
+.sidebar.is-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 248px;
+  box-shadow: 0 18px 60px rgba(8, 16, 26, 0.42);
+  animation: nav-slide-in 0.18s ease;
+}
+
+.nav-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  background: rgba(9, 16, 24, 0.38);
+  backdrop-filter: blur(1px);
+}
+
+@keyframes nav-slide-in {
+  from { transform: translateX(-14px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.nav-open-btn { display: inline-flex; gap: 4px; font-size: 13px; }
 
 .brand {
   display: flex;
@@ -728,15 +831,60 @@ function onUserCommand(command: string): void {
   align-items: center;
   gap: 4px;
   height: 38px;
-  padding: 0 12px;
+  padding: 0 8px 0 12px;
   background: #fbfcfe;
   border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs-list::-webkit-scrollbar {
+  height: 0;
+}
+
+.tab-more {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #7d8b9a;
+  cursor: pointer;
   flex: 0 0 auto;
 }
 
-.tabs::-webkit-scrollbar {
-  height: 0;
+.tab-more:hover {
+  background: #eef2f7;
+  color: var(--brand-700);
+}
+
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #5f7082;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: #eef2f7;
+  color: var(--brand-700);
 }
 
 .tab {
@@ -778,6 +926,87 @@ function onUserCommand(command: string): void {
 .tab-close:hover {
   color: #cf4a3e;
   background: #fdeceb;
+}
+
+/* ---------------------------------------------------------------- 标签栏形态 */
+
+/* 梯形书签：上窄下宽的书签感 */
+.tabs-trapezoid .tab {
+  position: relative;
+  border-radius: 0;
+  border: 0;
+  height: 30px;
+  padding: 0 16px;
+  color: #5f7082;
+}
+.tabs-trapezoid .tab > * {
+  position: relative;
+  z-index: 1;
+}
+.tabs-trapezoid .tab::before {
+  content: '';
+  position: absolute;
+  inset: 3px 0 0;
+  background: #e6ecf3;
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+  z-index: 0;
+}
+.tabs-trapezoid .tab.active {
+  background: transparent;
+  box-shadow: none;
+  color: var(--brand-700);
+  font-weight: 600;
+}
+.tabs-trapezoid .tab.active::before {
+  background: var(--card);
+  box-shadow: 0 -1px 0 var(--line);
+}
+.tabs-trapezoid .tabs-list { align-items: flex-end; }
+
+/* 圆角卡片：每页签一张独立小卡 */
+.tabs-card .tab {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+.tabs-card .tab.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.tabs-card .tab.active .tab-close,
+.tabs-card .tab.active .tab-icon { color: rgba(255, 255, 255, 0.85); }
+
+/* 直角复古：无圆角 + 细边框 + 下压效果 */
+.tabs-retro .tab {
+  border-radius: 0;
+  border: 1px solid var(--line);
+  background: #f7f9fc;
+}
+.tabs-retro .tab.active {
+  background: var(--brand-50);
+  border-color: var(--brand);
+  color: var(--brand-700);
+  box-shadow: inset 0 -2px 0 var(--brand);
+}
+
+/* 下划线：无背景，仅底部指示条 */
+.tabs-underline .tabs-list { gap: 10px; }
+.tabs-underline .tab {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  height: 32px;
+  padding: 0 2px;
+}
+.tabs-underline .tab:hover { background: transparent; color: var(--brand-700); }
+.tabs-underline .tab.active {
+  background: transparent;
+  border: 0;
+  box-shadow: inset 0 -2px 0 var(--brand);
+  color: var(--brand-700);
+  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------- 内容区 */

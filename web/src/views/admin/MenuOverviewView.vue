@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'MenuOverviewView' })
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, Search } from '@element-plus/icons-vue'
 import { fetchMenuTree } from '../../api/menu'

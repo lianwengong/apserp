@@ -36,14 +36,15 @@ web/
   vite.config.ts        开发代理 / 端口 / 构建拆包
   src/
     api/                http 封装 + 后端 DTO 类型 + 各端点函数
-    stores/             session（token/权限点）、catalog（数据对象目录）
-    router/             hash 路由 + 登录守卫
+    schema/             PageSchema 类型、注册表、workbench/master-data 页面定义与单测
+    pickers/            参照选择器的业务映射（md.brand / md.partner / md.brandcontact）
+    stores/             session、catalog、menus、tabs（keep-alive/affix）、appearance（主题/密度/字号）
+    router/             hash 路由 + 登录守卫 + 路由 props 固定 code
     layouts/            主框架：侧边栏（工作台 / 平台管理 / 业务菜单 / 数据对象）、面包屑、多标签页
-    views/              Login / Home / MetaList / MenuPlaceholder / 403 / 404
-    components/         MetaFormDialog、MenuTree、CellValue
-    stores/             session / catalog / menus
+    views/              Login / Dashboard / PageView / ObjectPageView / MetaList / 设计器 / 平台页
+    components/         MetaFormDialog、RecordPicker、PageTabs、AppearanceDrawer、MenuTree、CellValue
     utils/              format（日期/数字/布尔）、schema（业务域分组与图标）、menu（菜单过滤/查找）
-    styles/base.css     设计变量 + Element Plus 主题覆盖
+    styles/base.css     设计变量 + 主题/暗色/密度/字号 + Element Plus 主题覆盖
 ```
 
 ## 元数据驱动能力
@@ -53,9 +54,52 @@ web/
 - **字段权限**：`GET /api/perm/fields` 返回 `Access`（0 不可见/1 只读/2 可写）；不可见字段不渲染，只读字段禁用输入。
 - **表单**：读取默认 `FormLayout`（控件类型、必填、只读、隐藏、列数、跨度）；控件映射 1 文本 / 2 整数 / 3 金额 / 4 日期 / 6 查找 / 8 开关；查找对象未配置时降级为手工输入 ID，并在占位符里说明。
 - **保存**：`POST /api/meta/{objectCode}` 原样提交 JSON——新增不带 `Id`，修改带 `Id`；空的可选字段新增时不提交（交给数据库默认值），NOT NULL 数字默认 0，避免“空值写空”把 INSERT/UPDATE 打挂。
-- **功能菜单（侧边栏）**：`GET /api/menu/tree` 把 `plat.Menu` 组树（10 个业务域 + 平台管理，约 677 个节点），按租户、终端（PC/PDA/POS…）与权限点过滤。侧边栏分为 **工作台**（我的待办/流程中心）、**平台管理**（仅管理员）、**业务菜单**（主数据/采购/销售/库存…）和 **数据对象**（快速入口）四组；支持逐级展开、业务菜单关键字搜索、折叠。叶子菜单进入 `/m/{code}`：已绑定页面/对象的走真实路由，未绑定的显示「菜单已登记 · 页面未绑定」占位页，并提供「去设计器绑定」入口。
-- **多标签页 / 面包屑**：数据对象按 `md/pur/sal/inv/...` 前缀分组，标签页在 sessionStorage 内保持，刷新后仍停留原对象；菜单页 tab 用菜单名作为标题。
+- **功能菜单（侧边栏）**：`GET /api/menu/tree` 把 `plat.Menu` 组树（10 个业务域 + 平台管理，约 679 个节点），按租户、终端（PC/PDA/POS…）与权限点过滤。侧边栏分为 **工作台**（我的待办/流程中心）、**平台管理**（仅管理员）、**业务菜单**（主数据/采购/销售/库存…）和 **数据对象**（快速入口）四组；支持逐级展开、业务菜单关键字搜索、折叠。叶子菜单进入 `/m/{code}`：已绑定页面/对象的走真实路由，未绑定的显示「菜单已登记 · 页面未绑定」占位页，并提供「去设计器绑定」入口。
+- **多标签页 / 面包屑**：数据对象按 `md/pur/sal/inv/...` 前缀分组；标签页在 sessionStorage 内保持，首页 affix，支持关闭其他/全部；keep-alive 让切回页签时查询条件、滚动位置不丢。菜单页 tab 用菜单名作为标题。
 - **导出**：当前筛选条件下最多 500 行 CSV（带 BOM，Excel 直接打开）。
+
+## 页面组合（PageSchema）
+
+后端元数据负责"字段/视图/表单/权限"，前端 `schema/` 负责"一个页面由哪些块组成"：
+
+| 页面 code | 类型 | 组成 | 入口 |
+|---|---|---|---|
+| `workbench` | dashboard | KPI 卡片、基础资料列表、快捷入口、平台管理入口、数据规模条 | 工作台 `/`、`/page/workbench` |
+| `master-data` | tabs | 品牌 / 品牌联系人 / 往来单位 三个真实对象页签，懒加载 + 保持挂载 | 菜单 010200 基础资料中心、`/page/master-data` |
+| `object` | object | 一个数据对象 = 列表 + 筛选 + 列设置 + 新建/编辑 + 子表 + 审批 + 导出 | `/object/:code`、业务菜单绑定 |
+| `placeholder` | placeholder | 已登记但未绑定页面的占位 | `/m/:code` |
+
+实现要点：
+
+- `schema/types.ts` 只允许可序列化描述（code/title/kind/objectCode/tabs/dashboard/permissions），函数与组件不进 schema；
+- `assertPageSchema` 在注册时校验：object 必须有 objectCode、tabs 至少有页签且 key 不重复、dashboard 必须有 cards；
+- 页面定义优先从后端 `plat.PageSchema`（`GET /api/page-schema/{code}`）读取；远程不存在/停用/JSON 不合法/网络失败时回退本地同构定义，前端不会因远程配置坏掉白屏；
+- 平台管理 → 元数据设计 → **页面编排**（`/system/pages`）可新建/编辑/停用/删除页面，服务端做第二道 JSON 与结构校验；
+- 路由用 `props` 把 code 固定进页面实例，keep-alive 下隐藏页签不会跟着新路由重新查询；
+- PageView 校验页面入口权限；页面未配置给出明确错误与返回入口，不白屏。
+
+### 页面编排（/system/pages）
+
+- 列表：编码、标题、类型、版本、启用、更新时间；支持搜索、刷新、新建、编辑、预览、删除。
+- 编辑器：表单字段 code/title/kind/enabled/remark 是权威值；保存时覆盖 JSON 中对应字段，避免两套值打架。
+- 校验：JSON 语法 + PageSchema 结构 + kind 专属规则（objectCode / tabs key / dashboard cards），前后端各校验一次。
+- 预览：打开 `#/page/{code}`；远程页面无需重新构建前端，保存后立即生效（前端缓存 30 秒，保存会主动失效）。
+- 种子：`workbench`、`master-data` 与前端本地定义同构，便于灰度与回退。
+
+### 参照选择（RecordPicker）
+
+查找字段不再受"200 条下拉"限制：`RecordPicker` 走列表引擎，支持关键字、分页、默认视图列、双击选择；选中后按 `pickers/registry.ts` 的 `mapTo` 回填主键与名称/编码等便利字段。当前已接入品牌联系人 → 品牌（`V44`/`V45`）。
+
+### 外观与偏好
+
+右上角齿轮打开：主题配色（墨绿/海蓝/靛紫/石墨）、明暗、界面密度（紧凑/标准/宽松）、字号（小/标准/大）。全部落到 CSS 变量与 `html[data-*]`，localStorage 持久化，刷新后保持。
+
+### 生产脚本
+
+- 首页/工作台：`apserp-dashboard-new.png`
+- 基础资料中心：`apserp-master-data.png`
+- 参照选择：`apserp-record-picker.png`
+- 外观暗色：`apserp-dark.png`
 
 ## 平台管理（平台管理员）
 
@@ -65,7 +109,7 @@ web/
 |---|---|---|
 | 平台概览 | `/admin` | 可用：租户数、对象/菜单/版本统计、模块快捷入口 |
 | 租户与组织 | `/admin/tenants` | 租户列表可用（只读）；组织架构、用户管理占位；角色与权限跳设计器 |
-| 元数据设计 | `/design`、`/design?tab=*`、`/system/modules`、`/system/menus` | 设计器中心、字段、子表、状态机、打印、模块管理、菜单设置、发布回滚均可用；页面/表单未实现 |
+| 元数据设计 | `/design`、`/design?tab=*`、`/system/modules`、`/system/menus` | 设计器中心、字段、子表、状态机、打印、模块管理、菜单设置、发布回滚均可用；页面模板见「页面组合（PageSchema）」 |
 | 规则与流程 | `/design?tab=rule/button/approval` | 可用（流程中心/待办在工作台） |
 | 基础配置 | `/m/900501…` | 占位（字典/编号/参数/消息模板尚未实现） |
 | 安全与审计 | `/m/900601…` | 占位（日志/导出审计/备份尚未实现） |
@@ -81,6 +125,10 @@ web/
 | `GET /api/perm/fields?objectCode=` | 字段级权限 `field -> 0/1/2` |
 | `GET /api/meta/objects` | 数据对象目录 |
 | `GET /api/menu/tree?terminal=1` | 功能模块菜单树（按租户/终端/权限过滤） |
+| `GET /api/page-schema/{code}` | 远程页面定义；`data:null` 表示回退本地 |
+| `GET /api/admin/page-schemas` | 页面编排列表（需 `DESIGN:publish`） |
+| `POST /api/admin/page-schemas` | 新建/更新页面定义（服务端校验 JSON） |
+| `DELETE /api/admin/page-schemas/{id}` | 软删页面定义 |
 | `GET /api/admin/tenants` | 平台管理员：租户列表（只读） |
 | `GET /api/meta/objects/{code}/{fields,views,forms}` | 渲染配置 |
 | `GET /api/meta/{code}?filters=&sort=&page=&size=` | 列表（引擎内完成过滤/排序/分页） |
@@ -97,9 +145,12 @@ web/
 
 ## 已知限制 / 下一步
 
+- **页面编排是“JSON 编辑器 + 校验 + 预览”**，不是拖拽式画布；页面版本历史、发布审批、灰度回滚还没做。页面 JSON 与字段元数据分属两层：页面管组合，字段/视图仍由设计器控制。
+- **参照选择只做单选**；多选、按分类左树、跨对象批量回填还没做。当前唯一真实查找关系是「品牌联系人 → 品牌」；其它 lookup 字段缺 `lookupSource` 时降级为手工输入 ID。
+- **工作台看板用 CSS 条形而不是图表库**：KPI 与数据规模是真实接口数据，趋势图/仪表盘/大屏（ECharts）未接；引入图表库需登记依赖白名单。
+- **暗色模式覆盖主框架与常用组件**；打印、部分设计器内嵌 SVG/固定色需要逐页验收，暂不作为暗色验收范围。
 - `/api/perm/me` 只返回权限点集合，不含 `CanWrite/CanDelete` 等动作位：写按钮按「有该数据对象权限」显示，实际由服务端拦截（403）。后端补动作位后按位控制即可。
-- 暂无删除/审批/附件/子表控件；`MetaFormDialog` 的控件映射预留了扩展位。
-- 功能菜单已接入：`plat.Menu` 当前 677 条（租户 1，含平台管理 41 条），10 个业务域 + 1 个平台管理域；绝大多数业务菜单未绑定 `PageId`/数据对象，点击进入占位页，需逐个绑定后才会变成可用业务页面。
+- 功能菜单已接入：`plat.Menu` 当前 680 条（租户 1，含平台管理 42 条），10 个业务域 + 1 个平台管理域；已通过 `V43` 把品牌/供应商/客户/基础资料中心绑定到真实页面，其余业务菜单仍是占位页。
 - 业务菜单根 `01` 已从「平台与主数据」改名为「主数据」，但其中仍保留历史的系统平台/安全与审计/集成与开放子模块；它们与平台管理里的同名模块存在重叠，下一步应做菜单迁移/下线（需确认清单）。
 - 平台管理的租户列表只读；开通租户后端已有 `POST /api/admin/tenants/{id}/provision`，前端开通向导与停用/到期管理尚未接入；组织/用户/字典/审计/集成/运维页面仍是占位。
 - `plat.Menu` 里存在同名节点（如「角色管理」「登录用户」重复出现），属于历史菜单数据，需要菜单治理/去重，前端目前按原样展示。
@@ -109,9 +160,11 @@ web/
 
 ## 验收
 
-- `npm run typecheck`、`npm run build` 全绿（当前产物 gzip ≈ 390 KB）。
-- 端到端脚本：`tools/shot/apserp-web-check.mjs`（Playwright + 本机 Edge），覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，当前 10/10 通过、控制台 0 错误。
-- 菜单脚本：`tools/shot/apserp-menu-check.mjs`，覆盖 10 个根域、展开、搜索「品牌」、点击菜单进入占位页，控制台 0 错误。
-- 平台管理脚本：`tools/shot/apserp-admin-check.mjs`，覆盖平台管理根、8 个模块、平台概览、租户列表、菜单总览，控制台 0 错误。
-- 侧边栏脚本：`tools/shot/apserp-nav-check.mjs`，覆盖工作台/平台管理/业务菜单/基础资料四组、元数据设计叶子、模块管理与菜单设置页面，控制台 0 错误。
-- 展示截图：`tools/shot/apserp-final-*.png`、`tools/shot/apserp-menu*.png`、`tools/shot/apserp-admin-*.png`、`tools/shot/apserp-nav*.png`。
+- `npm run test`：`vue-tsc` + PageSchema/参照映射单测（5 项）全绿；单测用 Vite SSR 直接加载 TS，Node 20 的 CI 不依赖 tsx/ts-node。
+- `npm run build` 全绿。
+- 生产验收脚本：`tools/shot/apserp-prod-check.mjs`，覆盖登录 → 工作台 → 基础资料中心（3 页签）→ 品牌联系人 → 品牌参照选择（搜索“农夫”/分页）→ 页签 keep-alive（关键字保留）→ 暗色切换 → 关闭其他 → 菜单搜索打开真实对象 → 顶层页签 keep-alive，控制台 0 错误。
+- 页面编排脚本：`tools/shot/apserp-page-schema-check.mjs`，覆盖远程 PageSchema 列表 → 新建 → 远程页面打开 → 删除，控制台 0 错误。
+- 外观持久化脚本：`tools/shot/apserp-appearance-check.mjs`，覆盖主题/密度/字号刷新后保持与恢复默认。
+- 端到端脚本：`tools/shot/apserp-web-check.mjs`，覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，控制台 0 错误。
+- 菜单脚本：`tools/shot/apserp-menu-check.mjs`；平台管理脚本：`tools/shot/apserp-admin-check.mjs`；侧边栏脚本：`tools/shot/apserp-nav-check.mjs`。
+- 展示截图：`tools/shot/apserp-dashboard-new.png`、`apserp-master-data.png`、`apserp-record-picker.png`、`apserp-dark.png`、`apserp-dark-dashboard.png`、`apserp-page-schema.png`、`apserp-remote-page.png` 等。

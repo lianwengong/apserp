@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'PlatformOverview' })
 import { computed, onMounted, ref } from 'vue'
 import type { Component } from 'vue'
 import { useRouter } from 'vue-router'

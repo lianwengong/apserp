@@ -1,4 +1,5 @@
 <script setup lang="ts">
+defineOptions({ name: 'TenantListView' })
 import { onMounted, ref } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { listTenants } from '../../api/admin'

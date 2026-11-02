@@ -3,6 +3,8 @@ import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import ChildTables from './ChildTables.vue'
 import AttachmentPanel from './AttachmentPanel.vue'
+import RecordPicker from './RecordPicker.vue'
+import { pickerFor } from '../pickers/registry'
 import type { FormInstance, FormRules } from 'element-plus'
 import type {
   DataObjectDto,
@@ -54,6 +56,9 @@ const formRef = ref<FormInstance>()
 const saving = ref(false)
 const values = reactive<Record<string, any>>({})
 const lookupOptions = reactive<Record<string, LookupOption[]>>({})
+const pickerVisible = ref(false)
+const pickerField = ref<DialogField | null>(null)
+const pickerObject = ref('')
 
 const visible = computed({
   get: () => props.modelValue,
@@ -174,8 +179,9 @@ function resetValues(): void {
       else values[field.fieldName] = raw ?? ''
     } else if (isBitField(meta)) {
       values[field.fieldName] = /^isenabled$/i.test(field.fieldName)
-    } else if (isNumberField(meta) && meta?.nullable === false) {
-      // 数据库列 NOT NULL 但没有默认值时，留空会导致 INSERT 失败，这里给 0
+    } else if (isNumberField(meta) && meta?.nullable === false && meta.lookupType !== 2) {
+      // 数据库列 NOT NULL 但没有默认值时，留空会导致 INSERT 失败，这里给 0；
+      // 查找字段例外：0 不是合法外键，交给用户选择。
       values[field.fieldName] = 0
     } else {
       values[field.fieldName] = undefined
@@ -245,6 +251,47 @@ function lookupConfigured(field: DialogField): boolean {
 
 function lookupFallbackPlaceholder(field: DialogField): string {
   return `${field.label} ID（查找对象未配置）`
+}
+
+/** 打开生产级参照选择器（关键字 + 分页 + 默认视图列），替代 200 条下拉的天花板。 */
+function openPicker(field: DialogField): void {
+  const meta = fieldOf(field.fieldName)
+  if (!meta?.lookupSource) return
+  pickerField.value = field
+  pickerObject.value = meta.lookupSource
+  pickerVisible.value = true
+}
+
+/**
+ * 参照选择结果：
+ * 1) 回填当前查找字段（主键值）；
+ * 2) 把显示值补进下拉选项，避免选择后控件空白；
+ * 3) 按 picker 注册的 mapTo 回填名称/编码等便利字段（表单里存在且可写才写）。
+ */
+function onPickerSelect(row: Row): void {
+  const field = pickerField.value
+  if (!field) return
+  const target = catalog.byCode(pickerObject.value)
+  const definition = pickerFor(pickerObject.value)
+  const value = row[target?.primaryKey ?? 'Id']
+  const displayField = definition.displayField || 'Name'
+  const display = String(row[displayField] ?? row['Name'] ?? row['Code'] ?? value ?? '')
+  values[field.fieldName] = value
+
+  const options = lookupOptions[field.fieldName] ?? []
+  lookupOptions[field.fieldName] = [
+    { label: display, value },
+    ...options.filter((option) => option.value !== value)
+  ]
+
+  if (!definition.mapTo) return
+  const mapped = definition.mapTo(row)
+  for (const [name, mappedValue] of Object.entries(mapped)) {
+    if (name === field.fieldName) continue
+    const dialogField = dialogFields.value.find((item) => item.fieldName === name)
+    if (!dialogField || isDisabled(dialogField)) continue
+    values[name] = mappedValue
+  }
 }
 
 // ---------------------------------------------------------------- 保存
@@ -431,9 +478,27 @@ watch(
             :placeholder="`请输入${field.label}`"
             clearable
           />
+
+          <el-button
+            v-if="controlOf(field) === 'lookup' && lookupConfigured(field) && !isDisabled(field)"
+            link
+            type="primary"
+            size="small"
+            class="lookup-picker"
+            @click="openPicker(field)"
+          >
+            高级选择
+          </el-button>
         </el-form-item>
       </div>
     </el-form>
+
+    <RecordPicker
+      v-model="pickerVisible"
+      :object-code="pickerObject"
+      :title="pickerField ? `选择${pickerField.label}` : '选择记录'"
+      @select="onPickerSelect"
+    />
 
     <ChildTables
       v-if="object"
@@ -486,5 +551,11 @@ watch(
 
 .lookup-missing {
   width: 100%;
+}
+
+.lookup-picker {
+  margin-top: 2px;
+  padding: 0;
+  font-size: 11.5px;
 }
 </style>
