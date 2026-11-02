@@ -11,7 +11,7 @@ export interface TabItem {
   cacheName?: string
 }
 
-const STORAGE_KEY = 'apserp.tabs.v2'
+const STORAGE_KEY = 'aschain.tabs.v2'
 const HOME: TabItem = { key: '/', label: '工作台', closable: false, cacheName: 'DashboardView' }
 
 function read(): TabItem[] {

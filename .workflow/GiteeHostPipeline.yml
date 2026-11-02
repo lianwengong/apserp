@@ -7,10 +7,10 @@
 # 前置：
 #   1. 在 Gitee Go 里新建主机组，装好 agent，记下 hostGroupID（见 docs/ci-gitee-host.md）
 #   2. 把下面的 hostGroupID 改成你的主机组 ID
-#   3. 那台机器的 SQL Server 上要有 apserp_dev 测试账号权限（tools\ci-db-reset.ps1 会处理）
+#   3. 那台机器的 SQL Server 上要有 aschain_dev 测试账号权限（tools\ci-db-reset.ps1 会处理）
 version: '1.0'
-name: apserp-ci-host
-displayName: APSERP CI（自建主机全量四段）
+name: aschain-ci-host
+displayName: ASCHAIN CI（自建主机全量四段）
 strategy:
   blocking: true
   stepTimeout: 60

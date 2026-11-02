@@ -1,6 +1,6 @@
 import type { ApiEnvelope } from './types'
 
-const TOKEN_KEY = 'apserp.token'
+const TOKEN_KEY = 'aschain.token'
 
 /** 业务错误：携带后端错误码与 HTTP 状态，页面据此区分 401 / 403 / 业务校验失败。 */
 export class ApiError extends Error {

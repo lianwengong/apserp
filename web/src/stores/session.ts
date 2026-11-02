@@ -3,8 +3,8 @@ import { getToken, setToken } from '../api/http'
 import { me } from '../api/perm'
 import type { LoginResult } from '../api/types'
 
-const USER_KEY = 'apserp.user'
-const TENANT_KEY = 'apserp.tenant'
+const USER_KEY = 'aschain.user'
+const TENANT_KEY = 'aschain.tenant'
 
 export interface SessionUser {
   userId: number

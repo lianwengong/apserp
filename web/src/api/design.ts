@@ -24,7 +24,7 @@ export const designApi = {
   renderPrint: (objectCode: string, id: number, templateCode: string) =>
     fetch(
       `/api/runtime/print?objectCode=${encodeURIComponent(objectCode)}&id=${id}&templateCode=${encodeURIComponent(templateCode)}`,
-      { headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` } }
+      { headers: { Authorization: `Bearer ${localStorage.getItem('aschain.token') ?? ''}` } }
     ).then(async (res) => {
       if (!res.ok) throw new Error(`渲染失败（HTTP ${res.status}）`)
       return res.text()

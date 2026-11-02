@@ -38,7 +38,7 @@ git --version # git version 2.56.0.windows.4
 
 | 项 | 值 |
 |---|---|
-| 库名 | `APSErpV3` |
+| 库名 | `ASChain` |
 | 排序规则 | `Chinese_PRC_CI_AS` |
 | 兼容级别 | 160（SQL Server 2022） |
 | 恢复模式 | FULL |
@@ -52,9 +52,9 @@ git --version # git version 2.56.0.windows.4
 应用连接用专用登录，不使用 `sa`：
 
 ```
-login:    apserp_dev
+login:    aschain_dev
 password: Apserp#2026Dev        （仅本地开发，生产用密钥管理）
-权限:     APSErpV3 db_owner
+权限:     ASChain db_owner
 ```
 
 `application.yml` 默认值已指向该账号，可用环境变量覆盖：
@@ -69,21 +69,21 @@ DB_USER / DB_PASSWORD
 
 ```bash
 mvn flyway:baseline -Dflyway.baselineVersion=18 \
-    "-Dflyway.url=jdbc:sqlserver://localhost:1433;databaseName=APSErpV3;encrypt=false;trustServerCertificate=true" \
-    -Dflyway.user=apserp_dev -Dflyway.password='Apserp#2026Dev'
+    "-Dflyway.url=jdbc:sqlserver://localhost:1433;databaseName=ASChain;encrypt=false;trustServerCertificate=true" \
+    -Dflyway.user=aschain_dev -Dflyway.password='Apserp#2026Dev'
 ```
 
 历史表现状：`installed_rank=1, version=18, type=BASELINE, success=true`。
 **含义：V1–V18 视为已应用，后续新增脚本从 V19 开始。**
 
-> 踩坑：Flyway 用「当前用户的默认 schema」判断库是否为空。`apserp_dev` 默认 schema 是 `dbo`，
+> 踩坑：Flyway 用「当前用户的默认 schema」判断库是否为空。`aschain_dev` 默认 schema 是 `dbo`，
 > 而所有表都在 `plat/md/...` 下，`dbo` 为空 → Flyway 误判为全新库并从 V1 重跑，
 > 撞上「对象已存在」。解决办法就是显式 baseline。
 
 ## 5. 启动与冒烟
 
 ```bash
-cd F:\harness\apserp
+cd F:\harness\aschain
 mvn spring-boot:run
 ```
 

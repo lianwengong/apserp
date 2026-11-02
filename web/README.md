@@ -1,4 +1,4 @@
-# web/ — APSERP 前端（Vue 3 + TypeScript strict + Vite）
+# web/ — ASCHAIN 前端（Vue 3 + TypeScript strict + Vite）
 
 列表、表单、权限全部由后端元数据驱动：**新增一个数据对象，前端不改一行代码**，路由 `/object/:code` 直接渲染。
 
@@ -96,10 +96,10 @@ web/
 
 ### 生产脚本
 
-- 首页/工作台：`apserp-dashboard-new.png`
-- 基础资料中心：`apserp-master-data.png`
-- 参照选择：`apserp-record-picker.png`
-- 外观暗色：`apserp-dark.png`
+- 首页/工作台：`aschain-dashboard-new.png`
+- 基础资料中心：`aschain-master-data.png`
+- 参照选择：`aschain-record-picker.png`
+- 外观暗色：`aschain-dark.png`
 
 ## 平台管理（平台管理员）
 
@@ -162,9 +162,9 @@ web/
 
 - `npm run test`：`vue-tsc` + PageSchema/参照映射单测（5 项）全绿；单测用 Vite SSR 直接加载 TS，Node 20 的 CI 不依赖 tsx/ts-node。
 - `npm run build` 全绿。
-- 生产验收脚本：`tools/shot/apserp-prod-check.mjs`，覆盖登录 → 工作台 → 基础资料中心（3 页签）→ 品牌联系人 → 品牌参照选择（搜索“农夫”/分页）→ 页签 keep-alive（关键字保留）→ 暗色切换 → 关闭其他 → 菜单搜索打开真实对象 → 顶层页签 keep-alive，控制台 0 错误。
-- 页面编排脚本：`tools/shot/apserp-page-schema-check.mjs`，覆盖远程 PageSchema 列表 → 新建 → 远程页面打开 → 删除，控制台 0 错误。
-- 外观持久化脚本：`tools/shot/apserp-appearance-check.mjs`，覆盖主题/密度/字号刷新后保持与恢复默认。
-- 端到端脚本：`tools/shot/apserp-web-check.mjs`，覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，控制台 0 错误。
-- 菜单脚本：`tools/shot/apserp-menu-check.mjs`；平台管理脚本：`tools/shot/apserp-admin-check.mjs`；侧边栏脚本：`tools/shot/apserp-nav-check.mjs`。
-- 展示截图：`tools/shot/apserp-dashboard-new.png`、`apserp-master-data.png`、`apserp-record-picker.png`、`apserp-dark.png`、`apserp-dark-dashboard.png`、`apserp-tree-rail.png`、`apserp-page-schema.png`、`apserp-remote-page.png` 等。
+- 生产验收脚本：`tools/shot/aschain-prod-check.mjs`，覆盖登录 → 工作台 → 基础资料中心（3 页签）→ 品牌联系人 → 品牌参照选择（搜索“农夫”/分页）→ 页签 keep-alive（关键字保留）→ 暗色切换 → 关闭其他 → 菜单搜索打开真实对象 → 顶层页签 keep-alive，控制台 0 错误。
+- 页面编排脚本：`tools/shot/aschain-page-schema-check.mjs`，覆盖远程 PageSchema 列表 → 新建 → 远程页面打开 → 删除，控制台 0 错误。
+- 外观持久化脚本：`tools/shot/aschain-appearance-check.mjs`，覆盖主题/密度/字号刷新后保持与恢复默认。
+- 端到端脚本：`tools/shot/aschain-web-check.mjs`，覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，控制台 0 错误。
+- 菜单脚本：`tools/shot/aschain-menu-check.mjs`；平台管理脚本：`tools/shot/aschain-admin-check.mjs`；侧边栏脚本：`tools/shot/aschain-nav-check.mjs`。
+- 展示截图：`tools/shot/aschain-dashboard-new.png`、`aschain-master-data.png`、`aschain-record-picker.png`、`aschain-dark.png`、`aschain-dark-dashboard.png`、`aschain-tree-rail.png`、`aschain-page-schema.png`、`aschain-remote-page.png` 等。

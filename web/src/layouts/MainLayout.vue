@@ -57,11 +57,11 @@ function openMenuFromTop(node: MenuNode): void {
 
 // ---------------------------------------------------------------- 侧边栏
 
-const collapsed = ref(localStorage.getItem('apserp.sidebar') === '1')
+const collapsed = ref(localStorage.getItem('aschain.sidebar') === '1')
 
 function toggleSidebar(): void {
   collapsed.value = !collapsed.value
-  localStorage.setItem('apserp.sidebar', collapsed.value ? '1' : '0')
+  localStorage.setItem('aschain.sidebar', collapsed.value ? '1' : '0')
 }
 
 const groups = computed(() => {

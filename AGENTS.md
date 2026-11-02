@@ -18,7 +18,7 @@
 | 框架 | Spring Boot 3.3.x |
 | 构建 | Maven |
 | 数据访问 | JdbcTemplate / NamedParameterJdbcTemplate 为主；MyBatis-Plus 仅用于简单 CRUD |
-| 数据库 | SQL Server 2022，库名 `APSErpV3` |
+| 数据库 | SQL Server 2022，库名 `ASChain` |
 | 迁移 | Flyway（`src/main/resources/db/migration`） |
 | 缓存 | Redis + Caffeine |
 | 测试 | JUnit 5 + AssertJ + Mockito（单测）；集成测试连本机真库（IT_DB_PASSWORD 环境变量），CI 用 Testcontainers |
@@ -28,8 +28,8 @@
 ## 2. 目录与分层
 
 ```
-src/main/java/com/apserp/
-  ApserpApplication.java
+src/main/java/com/aschain/
+  AsChainApplication.java
   common/            # 通用：结果体、异常、租户上下文、工具
   plat/              # 平台域：元数据引擎、权限、编号、审计
     meta/            # 数据对象、查询引擎、保存引擎、规则
@@ -38,7 +38,7 @@ src/main/java/com/apserp/
 src/main/resources/
   application.yml
   db/migration/      # Flyway，禁止修改已执行过的脚本，只能新增
-src/test/java/com/apserp/
+src/test/java/com/aschain/
   arch/              # ArchUnit 规则
 ```
 
@@ -83,7 +83,7 @@ src/test/java/com/apserp/
 |---|---|---|
 | 2026-10-30 | `SESSION_CONTEXT` 与连接池：请求 A 设了租户上下文，请求 B 复用同一物理连接会串租户 | **已作废**，见 2026-11-01 条：不要在业务代码里设上下文 |
 | 2026-11-01 | PowerShell 5.1 的 `Set-Content -Encoding UTF8` 会写 BOM，javac 报「非法字符」 | 一律用 Python 或 `UTF8Encoding($false)` 写文件；提交前检查 BOM |
-| 2026-11-01 | Flyway 按「连接用户默认 schema」判断库是否为空；`apserp_dev` 默认 `dbo`，表都在业务 schema 下，被误判为空库并从 V1 重跑 | 既有库首次接入必须显式 `flyway:baseline -Dflyway.baselineVersion=18`；`baseline-on-migrate` 只适用于新库 |
+| 2026-11-01 | Flyway 按「连接用户默认 schema」判断库是否为空；`aschain_dev` 默认 `dbo`，表都在业务 schema 下，被误判为空库并从 V1 重跑 | 既有库首次接入必须显式 `flyway:baseline -Dflyway.baselineVersion=18`；`baseline-on-migrate` 只适用于新库 |
 | 2026-11-01 | 引入 `spring-boot-starter-data-redis` 但本机未装 Redis，Actuator health 直接 DOWN | 未使用的中间件先关健康检查：`management.health.redis.enabled=false` |
 | 2026-11-01 | **写 `tenantSession.execute(con -> jdbcTemplate.query(...))` 完全无效**：`jdbcTemplate` 会从池里另取一条连接，上下文设在了 A 连接、查询跑在 B 连接，RLS 看不到租户 → 查询返回空。这是"能跑通演示、上线必炸"的典型缺陷，单测发现不了（有真库才暴露） | 上下文只在 **DataSource 层**注入：`TenantAwareDataSource` 在每次 `getConnection()` 时设置 `SESSION_CONTEXT`。**业务代码禁止手动设上下文，直接用 `JdbcTemplate` 即可**。`TenantSession` 类已删除 |
 | 2026-11-01 | 把 SQL 异常一律翻译成「数据对象不存在」会掩盖真实故障（锁超时、权限不足都被说成对象不存在） | 只把 `RAISERROR('数据对象不存在')` 翻译成业务错误 `2001`，其余一律 `1999` + 完整堆栈进日志 |

@@ -1,4 +1,4 @@
-# Gitee Go 流水线 —— APSErpV3（后端）
+# Gitee Go 流水线 —— ASChain（后端）
 #
 # 能力边界（实测环境为准）：
 #   - 云端 Maven 插件只提供 JDK 17；项目目标 21，这里用 mvn 参数显式降级到 17（源码无需改动）
@@ -7,8 +7,8 @@
 #
 # 触发：push / PR 到 master。
 version: '1.0'
-name: apserp-ci
-displayName: APSERP CI（编译 / 单测 / 架构守护）
+name: aschain-ci
+displayName: ASCHAIN CI（编译 / 单测 / 架构守护）
 strategy:
   blocking: true
   stepTimeout: 30

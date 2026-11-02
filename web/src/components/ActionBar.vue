@@ -79,7 +79,7 @@ function confirmTextOf(action: ResolvedAction, actions: ResolvedAction[], btnTex
 /** 打印：取回渲染好的 HTML，写进新窗口再调浏览器打印。 */
 async function printPage(url: string) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` }
+    headers: { Authorization: `Bearer ${localStorage.getItem('aschain.token') ?? ''}` }
   })
   if (!res.ok) throw new Error(`打印渲染失败（HTTP ${res.status}）`)
   const html = await res.text()
@@ -97,7 +97,7 @@ async function printPage(url: string) {
 /** 带 token 下载：导出接口需要鉴权，不能直接用 window.open。 */
 async function download(url: string) {
   const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` }
+    headers: { Authorization: `Bearer ${localStorage.getItem('aschain.token') ?? ''}` }
   })
   if (!res.ok) throw new Error(`导出失败（HTTP ${res.status}）`)
   const blob = await res.blob()

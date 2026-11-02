@@ -97,7 +97,7 @@ docker run --rm hello-world
 
 ```powershell
 docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Apserp#2026Dev" `
-  -p 1434:1433 -d --name apserp-mssql-test `
+  -p 1434:1433 -d --name aschain-mssql-test `
   mcr.microsoft.com/mssql/server:2022-latest
 docker ps
 ```
@@ -108,7 +108,7 @@ docker ps
 
 ```bash
 # 用 docker-compose 起全套（SQL Server + Redis）
-docker compose -f F:\harness\apserp\docker-compose.yml up -d
+docker compose -f F:\harness\aschain\docker-compose.yml up -d
 
 # 集成测试走 Testcontainers（把 CI 变量打开即可）
 set CI=true
@@ -135,12 +135,12 @@ Docker 在本项目里**只有两个用途**，都不影响开发：
 
 | 用途 | 本地是否需要 | CI |
 |---|---|---|
-| Testcontainers 集成测试 | 不需要（已改为直连本机 `APSErpV3_TEST`） | 需要 |
+| Testcontainers 集成测试 | 不需要（已改为直连本机 `ASChain_TEST`） | 需要 |
 | 起 Redis / 消息队列 | 一期不用 | — |
 
 已经做好的替代方案：
 
-- `APSErpV3_TEST` 空库 + 18 个 Flyway 迁移从零跑通（225 表 / 792 外键 / 180 RLS 谓词）
+- `ASChain_TEST` 空库 + 18 个 Flyway 迁移从零跑通（225 表 / 792 外键 / 180 RLS 谓词）
 - `MetaQueryLocalIT` 直连该库，覆盖建表完整性、RLS 默认拒绝、按租户过滤三个断言
 
 所以：**装 Docker 是"锦上添花"，不装也能把 G0.1 全部走完。**

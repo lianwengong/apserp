@@ -11,10 +11,10 @@
     <relativePath/>
   </parent>
 
-  <groupId>com.apserp</groupId>
-  <artifactId>apserp</artifactId>
+  <groupId>com.aschain</groupId>
+  <artifactId>aschain</artifactId>
   <version>0.1.0-SNAPSHOT</version>
-  <name>apserp</name>
+  <name>aschain</name>
   <description>进销存 V3 · 引擎驱动（AI 全量编码）</description>
 
   <properties>
@@ -132,7 +132,7 @@
           </includes>
         </configuration>
       </plugin>
-      <!-- CI：建测试库（mvn exec:java -Dexec.mainClass=com.apserp.support.CiDbInit） -->
+      <!-- CI：建测试库（mvn exec:java -Dexec.mainClass=com.aschain.support.CiDbInit） -->
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>exec-maven-plugin</artifactId>

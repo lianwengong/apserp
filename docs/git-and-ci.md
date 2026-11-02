@@ -10,8 +10,8 @@
 
 | 形式 | 例子 | 用途 |
 |---|---|---|
-| HTTPS | `https://gitee.com/你的用户名/apserp.git` | 最省事，输入账号密码或令牌即可 |
-| SSH | `git@gitee.com:你的用户名/apserp.git` | 免密，需先配公钥，适合天天提交 |
+| HTTPS | `https://gitee.com/你的用户名/aschain.git` | 最省事，输入账号密码或令牌即可 |
+| SSH | `git@gitee.com:你的用户名/aschain.git` | 免密，需先配公钥，适合天天提交 |
 
 地址由托管平台在“新建仓库”成功后生成，**不是自己编的**。
 
@@ -35,16 +35,16 @@
 1. 打开 https://gitee.com ，用手机号注册并登录。
 2. 右上角 **+** → **新建仓库**。
 3. 填写：
-   - 仓库名称：`apserp`
-   - 路径：`apserp`（地址会变成 `https://gitee.com/你的用户名/apserp.git`）
+   - 仓库名称：`aschain`
+   - 路径：`aschain`（地址会变成 `https://gitee.com/你的用户名/aschain.git`）
    - 是否开源：**私有**
    - **不要**勾选“使用 Readme 初始化”“初始化 .gitignore”“初始化开源许可证”——本地已有代码，勾了会冲突。
 4. 点 **创建**。页面会显示仓库地址，复制它。
 5. 把地址发给我，或自己在本机执行：
 
 ```powershell
-cd F:\harness\apserp
-git remote add origin https://gitee.com/你的用户名/apserp.git
+cd F:\harness\aschain
+git remote add origin https://gitee.com/你的用户名/aschain.git
 git push -u origin master
 ```
 
@@ -84,7 +84,7 @@ Gitee Go 的补偿办法（按推荐顺序）：
 ## 五、不想等平台，先在本地跑一遍 CI
 
 ```powershell
-cd F:\harness\apserp
+cd F:\harness\aschain
 powershell -ExecutionPolicy Bypass -File tools\ci-local.ps1
 ```
 
@@ -97,11 +97,11 @@ powershell -ExecutionPolicy Bypass -File tools\ci-local.ps1
 powershell -ExecutionPolicy Bypass -File tools\ci-db-reset.ps1 -Drop
 ```
 
-（需要本机 Windows 账号是 SQL Server 的 sysadmin；脚本只动 `APSErpV3_TEST`，不碰 `APSErpV3`。）
+（需要本机 Windows 账号是 SQL Server 的 sysadmin；脚本只动 `ASChain_TEST`，不碰 `ASChain`。）
 
 ## 六、Gitee Go 开通步骤
 
-1. 打开仓库页 → 顶部 **服务** → **Gitee Go**（或访问 `https://gitee.com/a-shen/apserp/gitee_go`）；
+1. 打开仓库页 → 顶部 **服务** → **Gitee Go**（或访问 `https://gitee.com/a-shen/aschain/gitee_go`）；
 2. 首次会要求 **绑定手机号**（账号设置里绑）；
 3. 选择「自定义流水线」→ 它会读取仓库里的 `.workflow/MasterPipeline.yml`；
 4. 保存后自动生成一次构建；以后 push 到 master 自动触发；

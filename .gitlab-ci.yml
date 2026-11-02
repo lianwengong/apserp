@@ -1,4 +1,4 @@
-# GitLab CI —— APSErpV3
+# GitLab CI —— ASChain
 # 说明：UTF-8 编码，禁止用 GBK 保存，否则 Runner 里注释与 URL 会乱码。
 stages:
   - build
@@ -41,7 +41,7 @@ test:
     MSSQL_SA_PASSWORD: "Apserp#2026Ci"
     # 集成测试开关：CI 打开；本地不设即自动跳过
     IT_ENABLED: "true"
-    IT_DB_URL: "jdbc:sqlserver://mssql:1433;databaseName=APSErpV3_TEST;encrypt=false;trustServerCertificate=true"
+    IT_DB_URL: "jdbc:sqlserver://mssql:1433;databaseName=ASChain_TEST;encrypt=false;trustServerCertificate=true"
     IT_DB_USER: "sa"
     IT_DB_PASSWORD: "Apserp#2026Ci"
   script:
@@ -53,7 +53,7 @@ test:
         sleep 2
       done
     # 建测试库（Flyway 不建库）
-    - mvn $MAVEN_CLI_OPTS -q exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit
+    - mvn $MAVEN_CLI_OPTS -q exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.aschain.support.CiDbInit
     # 全量测试：单测 + 集成测试（-Dit.db=true 打开本地 IT）
     - mvn $MAVEN_CLI_OPTS verify -Dit.db=true
   artifacts:

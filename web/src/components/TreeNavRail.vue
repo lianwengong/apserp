@@ -45,7 +45,7 @@ function isGroupActive(group: TreeNavGroup): boolean {
       placement="right-start"
       trigger="click"
       :width="280"
-      popper-class="apserp-tree-nav-popover"
+      popper-class="aschain-tree-nav-popover"
     >
       <template #reference>
         <button
@@ -137,18 +137,18 @@ function isGroupActive(group: TreeNavGroup): boolean {
 
 <style>
 /* popover 被 teleport 到 body，不能放在 scoped 里 */
-.apserp-tree-nav-popover {
+.aschain-tree-nav-popover {
   padding: 0 !important;
   border-radius: 10px !important;
 }
 
-.apserp-tree-nav-popover .nav-panel {
+.aschain-tree-nav-popover .nav-panel {
   max-height: 66vh;
   overflow-y: auto;
   padding: 6px;
 }
 
-.apserp-tree-nav-popover .panel-title {
+.aschain-tree-nav-popover .panel-title {
   position: sticky;
   top: 0;
   z-index: 1;

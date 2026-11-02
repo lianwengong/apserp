@@ -60,7 +60,7 @@ Element：--el-color-primary / light-3/5/7/8/9 / dark-2
 
 | 时机 | 动作 |
 |---|---|
-| 页面加载（未登录） | 读 `localStorage['apserp.appearance.v2']` 并应用（兼容老键 `apserp.appearance`） |
+| 页面加载（未登录） | 读 `localStorage['aschain.appearance.v2']` 并应用（兼容老键 `aschain.appearance`） |
 | 登录成功 / 主框架挂载 | `GET /api/preference` 拉回账号偏好，覆盖本地并重绘 |
 | 任意修改 / 恢复默认 | 先写本地，再 800ms 防抖 `PUT /api/preference/appearance` |
 | 拉取失败（未登录/网络问题） | 静默忽略，本地偏好照常生效 |

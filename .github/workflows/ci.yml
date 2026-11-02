@@ -26,7 +26,7 @@ jobs:
           --health-retries 20
     env:
       IT_ENABLED: "true"
-      IT_DB_URL: "jdbc:sqlserver://localhost:1433;databaseName=APSErpV3_TEST;encrypt=false;trustServerCertificate=true"
+      IT_DB_URL: "jdbc:sqlserver://localhost:1433;databaseName=ASChain_TEST;encrypt=false;trustServerCertificate=true"
       IT_DB_USER: "sa"
       IT_DB_PASSWORD: "Apserp#2026Ci"
     steps:
@@ -53,7 +53,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          if mvn -B -ntp exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.apserp.support.CiDbInit 2>&1 | tee ci-db-init.log; then
+          if mvn -B -ntp exec:java -Dexec.classpathScope=test -Dexec.mainClass=com.aschain.support.CiDbInit 2>&1 | tee ci-db-init.log; then
             echo "database ready"
           else
             echo "::group::CiDbInit 失败详情"

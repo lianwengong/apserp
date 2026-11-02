@@ -1,6 +1,6 @@
-# APSERP（进销存 V3 · 引擎驱动）
+# ASCHAIN（进销存 V3 · 引擎驱动）
 
-[![CI](https://github.com/lianwengong/apserp/actions/workflows/ci.yml/badge.svg)](https://github.com/lianwengong/apserp/actions/workflows/ci.yml)
+[![CI](https://github.com/lianwengong/aschain/actions/workflows/ci.yml/badge.svg)](https://github.com/lianwengong/aschain/actions/workflows/ci.yml)
 
 AI 全量编码模式下的项目骨架。规范见 `AGENTS.md`，架构决策见 `docs/adr/`。
 
@@ -8,8 +8,8 @@ AI 全量编码模式下的项目骨架。规范见 `AGENTS.md`，架构决策�
 
 | 平台 | 地址 | 用途 | 能跑到 |
 |---|---|---|---|
-| GitHub | https://github.com/lianwengong/apserp | **主 CI** | 编译 / 42 个测试（含 SQL Server 集成测试）/ 架构守护 / 前端构建 |
-| Gitee | https://gitee.com/a-shen/apserp | 镜像 + Gitee Go | 编译 / 单测 / 架构守护（云端无 SQL Server、Node 版本低） |
+| GitHub | https://github.com/lianwengong/aschain | **主 CI** | 编译 / 42 个测试（含 SQL Server 集成测试）/ 架构守护 / 前端构建 |
+| Gitee | https://gitee.com/a-shen/aschain | 镜像 + Gitee Go | 编译 / 单测 / 架构守护（云端无 SQL Server、Node 版本低） |
 
 - `git push` 默认推 GitHub（`branch.master.remote=github`）；推 Gitee 用 `git push origin master`。
 - 本地跑同一套四段：`powershell -ExecutionPolicy Bypass -File tools\ci-local.ps1`
@@ -22,19 +22,19 @@ AI 全量编码模式下的项目骨架。规范见 `AGENTS.md`，架构决策�
 | JDK | 21 | 已装（Adoptium 21.0.12） |
 | Maven | 3.9+ | 已装 3.9.16（C:\Users\59714\tools\maven） |
 | Git | 2.4x | 已装 2.56.0（PortableGit） |
-| SQL Server | 2022 | 已装；库 `APSErpV3` 已就绪（225 表/792 外键/RLS） |
+| SQL Server | 2022 | 已装；库 `ASChain` 已就绪（225 表/792 外键/RLS） |
 | Docker | 可选（Testcontainers 用） | 未装（CI 上跑） |
 
 ## 快速开始
 
 ```sql
 -- 1. 先由 DBA 建一个空库（Flyway 不负责建库）
-CREATE DATABASE [APSErpV3] COLLATE Chinese_PRC_CI_AS;
+CREATE DATABASE [ASChain] COLLATE Chinese_PRC_CI_AS;
 ```
 
 ```bash
 # 2. 执行迁移（建架构、表、外键、RLS、引擎、演示数据）
-mvn flyway:migrate -Dflyway.url="jdbc:sqlserver://localhost:1433;databaseName=APSErpV3;encrypt=false" \
+mvn flyway:migrate -Dflyway.url="jdbc:sqlserver://localhost:1433;databaseName=ASChain;encrypt=false" \
                    -Dflyway.user=sa -Dflyway.password=***
 
 # 2. 启动
@@ -61,11 +61,11 @@ npm run build      # 类型检查 + 产物 dist/
 ## 目录
 
 ```
-apserp/
+aschain/
   AGENTS.md               AI 编码契约（最重要）
   docs/adr/               架构决策记录
   docs/week1/             第一周任务卡
-  src/main/java/com/apserp
+  src/main/java/com/aschain
   src/main/resources/db/migration   Flyway 迁移（S1 已含建库脚本）
   web/                    前端（Vue 3 + TS strict + Vite）
 ```

@@ -35,8 +35,8 @@ export interface AppearanceState {
   moneyTone: boolean
 }
 
-const STORAGE_KEY = 'apserp.appearance.v2'
-const LEGACY_KEY = 'apserp.appearance'
+const STORAGE_KEY = 'aschain.appearance.v2'
+const LEGACY_KEY = 'aschain.appearance'
 
 const DEFAULTS: AppearanceState = {
   navMode: 'side',
