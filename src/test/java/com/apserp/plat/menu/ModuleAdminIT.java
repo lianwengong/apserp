@@ -217,6 +217,41 @@ class ModuleAdminIT {
     }
 
     @Test
+    @DisplayName("模型关系图：给出模块/功能点/菜单/终端的实际规模与「没接通」的警告")
+    void model_map_reports_real_shape() {
+        java.util.Map<String, Object> map = admin.modelMap();
+        assertThat(map).containsKeys("modules", "functions", "menus", "terminals", "permissions", "subsystem", "warnings");
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> modules = (java.util.Map<String, Object>) map.get("modules");
+        assertThat(((Number) modules.get("level1")).intValue()).isGreaterThanOrEqualTo(10);
+        assertThat(((Number) modules.get("total")).intValue())
+                .isEqualTo(((Number) modules.get("level1")).intValue()
+                        + ((Number) modules.get("level2")).intValue()
+                        + ((Number) modules.get("level3")).intValue());
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> menus = (java.util.Map<String, Object>) map.get("menus");
+        int total = ((Number) menus.get("total")).intValue();
+        int bound = ((Number) menus.get("boundToModule")).intValue();
+        int unbound = ((Number) menus.get("unboundModule")).intValue();
+        assertThat(bound + unbound).isEqualTo(total);
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> subsystem = (java.util.Map<String, Object>) map.get("subsystem");
+        assertThat(subsystem.get("implemented")).isEqualTo(false);
+
+        // 模块终端是空表时必须有明确警告（否则按模块配终端不会生效这件事没人知道）
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> terminals = (java.util.Map<String, Object>) map.get("terminals");
+        @SuppressWarnings("unchecked")
+        java.util.List<String> warnings = (java.util.List<String>) map.get("warnings");
+        if (((Number) terminals.get("moduleTerminalRows")).intValue() == 0) {
+            assertThat(warnings).anyMatch(w -> w.contains("ModuleTerminal"));
+        }
+    }
+
+    @Test
     @DisplayName("删除模块/功能点会连带清掉权限点，不留孤儿资源")
     void delete_drops_permission() {
         long moduleId = createModule(ROOT_CODE, null, true);

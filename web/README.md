@@ -38,7 +38,7 @@ web/
     api/                http 封装 + 后端 DTO 类型 + 各端点函数
     stores/             session（token/权限点）、catalog（数据对象目录）
     router/             hash 路由 + 登录守卫
-    layouts/            主框架：侧边栏功能菜单、面包屑、多标签页
+    layouts/            主框架：侧边栏（工作台 / 平台管理 / 业务菜单 / 数据对象）、面包屑、多标签页
     views/              Login / Home / MetaList / MenuPlaceholder / 403 / 404
     components/         MetaFormDialog、MenuTree、CellValue
     stores/             session / catalog / menus
@@ -53,20 +53,20 @@ web/
 - **字段权限**：`GET /api/perm/fields` 返回 `Access`（0 不可见/1 只读/2 可写）；不可见字段不渲染，只读字段禁用输入。
 - **表单**：读取默认 `FormLayout`（控件类型、必填、只读、隐藏、列数、跨度）；控件映射 1 文本 / 2 整数 / 3 金额 / 4 日期 / 6 查找 / 8 开关；查找对象未配置时降级为手工输入 ID，并在占位符里说明。
 - **保存**：`POST /api/meta/{objectCode}` 原样提交 JSON——新增不带 `Id`，修改带 `Id`；空的可选字段新增时不提交（交给数据库默认值），NOT NULL 数字默认 0，避免“空值写空”把 INSERT/UPDATE 打挂。
-- **功能菜单（侧边栏）**：`GET /api/menu/tree` 把 `plat.Menu` 组树（10 个业务域 + 平台管理，约 677 个节点），按租户、终端（PC/PDA/POS…）与权限点过滤；侧边栏支持逐级展开、关键字搜索、折叠。叶子菜单进入 `/m/{code}`：已绑定页面/对象的走真实路由，未绑定的显示「菜单已登记 · 页面未绑定」占位页，并提供「去设计器绑定」入口。
+- **功能菜单（侧边栏）**：`GET /api/menu/tree` 把 `plat.Menu` 组树（10 个业务域 + 平台管理，约 677 个节点），按租户、终端（PC/PDA/POS…）与权限点过滤。侧边栏分为 **工作台**（我的待办/流程中心）、**平台管理**（仅管理员）、**业务菜单**（主数据/采购/销售/库存…）和 **数据对象**（快速入口）四组；支持逐级展开、业务菜单关键字搜索、折叠。叶子菜单进入 `/m/{code}`：已绑定页面/对象的走真实路由，未绑定的显示「菜单已登记 · 页面未绑定」占位页，并提供「去设计器绑定」入口。
 - **多标签页 / 面包屑**：数据对象按 `md/pur/sal/inv/...` 前缀分组，标签页在 sessionStorage 内保持，刷新后仍停留原对象；菜单页 tab 用菜单名作为标题。
 - **导出**：当前筛选条件下最多 500 行 CSV（带 BOM，Excel 直接打开）。
 
 ## 平台管理（平台管理员）
 
-侧边栏「功能菜单 → 平台管理」是独立的管理控制台入口（`V38__089_platform_admin_menus.sql`，8 个模块 / 32 个功能入口，仅平台管理员可见）：
+侧边栏「平台管理」是独立的管理控制台（`V38__089_platform_admin_menus.sql` + `V39__090_platform_menu_cleanup.sql`，8 个模块，仅平台管理员可见）；流程中心/我的待办已归入「工作台」，平台管理树内不再重复：
 
 | 模块 | 入口 | 状态 |
 |---|---|---|
 | 平台概览 | `/admin` | 可用：租户数、对象/菜单/版本统计、模块快捷入口 |
 | 租户与组织 | `/admin/tenants` | 租户列表可用（只读）；组织架构、用户管理占位；角色与权限跳设计器 |
-| 元数据设计 | `/design?tab=*`、`/admin/menus` | 数据对象/字段、子表、规则、按钮、审批、发布可用；菜单总览只读；页面/模块管理占位 |
-| 规则与流程 | `/design?tab=rule/button/approval`、`/workflow`、`/todo` | 可用 |
+| 元数据设计 | `/design`、`/design?tab=*`、`/system/modules`、`/system/menus` | 设计器中心、字段、子表、状态机、打印、模块管理、菜单设置、发布回滚均可用；页面/表单未实现 |
+| 规则与流程 | `/design?tab=rule/button/approval` | 可用（流程中心/待办在工作台） |
 | 基础配置 | `/m/900501…` | 占位（字典/编号/参数/消息模板尚未实现） |
 | 安全与审计 | `/m/900601…` | 占位（日志/导出审计/备份尚未实现） |
 | 集成与开放 | `/m/900701…` | 占位（OpenAPI/Webhook/SSO 尚未实现） |
@@ -100,6 +100,7 @@ web/
 - `/api/perm/me` 只返回权限点集合，不含 `CanWrite/CanDelete` 等动作位：写按钮按「有该数据对象权限」显示，实际由服务端拦截（403）。后端补动作位后按位控制即可。
 - 暂无删除/审批/附件/子表控件；`MetaFormDialog` 的控件映射预留了扩展位。
 - 功能菜单已接入：`plat.Menu` 当前 677 条（租户 1，含平台管理 41 条），10 个业务域 + 1 个平台管理域；绝大多数业务菜单未绑定 `PageId`/数据对象，点击进入占位页，需逐个绑定后才会变成可用业务页面。
+- 业务菜单根 `01` 已从「平台与主数据」改名为「主数据」，但其中仍保留历史的系统平台/安全与审计/集成与开放子模块；它们与平台管理里的同名模块存在重叠，下一步应做菜单迁移/下线（需确认清单）。
 - 平台管理的租户列表只读；开通租户后端已有 `POST /api/admin/tenants/{id}/provision`，前端开通向导与停用/到期管理尚未接入；组织/用户/字典/审计/集成/运维页面仍是占位。
 - `plat.Menu` 里存在同名节点（如「角色管理」「登录用户」重复出现），属于历史菜单数据，需要菜单治理/去重，前端目前按原样展示。
 - 登录返回 `mustChangePassword`，但后端暂无改密接口，界面先不强制。
@@ -112,4 +113,5 @@ web/
 - 端到端脚本：`tools/shot/apserp-web-check.mjs`（Playwright + 本机 Edge），覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，当前 10/10 通过、控制台 0 错误。
 - 菜单脚本：`tools/shot/apserp-menu-check.mjs`，覆盖 10 个根域、展开、搜索「品牌」、点击菜单进入占位页，控制台 0 错误。
 - 平台管理脚本：`tools/shot/apserp-admin-check.mjs`，覆盖平台管理根、8 个模块、平台概览、租户列表、菜单总览，控制台 0 错误。
-- 展示截图：`tools/shot/apserp-final-*.png`、`tools/shot/apserp-menu*.png`、`tools/shot/apserp-admin-*.png`。
+- 侧边栏脚本：`tools/shot/apserp-nav-check.mjs`，覆盖工作台/平台管理/业务菜单/基础资料四组、元数据设计叶子、模块管理与菜单设置页面，控制台 0 错误。
+- 展示截图：`tools/shot/apserp-final-*.png`、`tools/shot/apserp-menu*.png`、`tools/shot/apserp-admin-*.png`、`tools/shot/apserp-nav*.png`。

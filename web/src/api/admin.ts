@@ -19,6 +19,7 @@ export function listTenants(): Promise<TenantDto[]> {
 /** 系统功能模块管理（模块 → 功能点 → 动作链） */
 export const moduleAdminApi = {
   overview: () => request<Record<string, number>>('/api/admin/modules/overview'),
+  modelMap: () => request<ModelMap>('/api/admin/modules/model-map'),
   tree: (keyword?: string) =>
     request<ModuleNode[]>(`/api/admin/modules/tree${queryString({ keyword })}`),
   save: (body: ModuleSaveBody) =>
@@ -61,6 +62,26 @@ export const menuAdminApi = {
 }
 
 // ---------------------------------------------------------------- 类型
+
+export interface ModelMap {
+  modules: { total: number; level1: number; level2: number; level3: number }
+  functions: { total: number; actions: number }
+  menus: {
+    total: number
+    boundToModule: number
+    unboundModule: number
+    boundToPage: number
+    placeholder: number
+  }
+  terminals: {
+    menuTerminalRows: number
+    moduleTerminalRows: number
+    byType: { terminalType: number; menus: number }[]
+  }
+  permissions: { mod: number; fun: number; data: number; design: number }
+  subsystem: { implemented: boolean; note: string }
+  warnings: string[]
+}
 
 export interface ModuleNode {
   id: number

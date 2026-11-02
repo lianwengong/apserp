@@ -43,6 +43,12 @@ public class ModuleAdminController {
         return ApiResult.ok(moduleAdmin.overview());
     }
 
+    /** 模型关系图：模块 / 功能点 / 菜单 / 终端 / 权限点的实际规模与连接情况。 */
+    @GetMapping("/model-map")
+    public ApiResult<java.util.Map<String, Object>> modelMap() {
+        return ApiResult.ok(moduleAdmin.modelMap());
+    }
+
     @GetMapping("/tree")
     public ApiResult<List<ModuleAdminService.ModuleNode>> tree(
             @RequestParam(required = false) String keyword) {

@@ -98,3 +98,5 @@ apserp/
 - 灰度名单现在**真的分用户生效**：名单内用户读版本快照（对象/字段/视图/表单/规则/按钮），其余人读实时库；平台管理员永远读实时库。
   边界：灰度只影响「读」，物理表结构与保存过程仍用实时元数据，所以灰度期间只改展示与规则，不要加删字段。
 - 附件存本地磁盘（`./data/attachments`），多实例部署前需要换成对象存储或共享盘。
+- 功能模块、菜单、终端的关系见 [docs/model-module-subsystem-menu-terminal.md](docs/model-module-subsystem-menu-terminal.md)：
+  子系统尚未建实体；模块与菜单当前 1:1 双写；终端只在菜单层生效（`plat.ModuleTerminal` 为空表）。

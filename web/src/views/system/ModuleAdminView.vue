@@ -17,6 +17,59 @@
       </div>
     </div>
 
+    <el-card v-if="model" shadow="never" class="model-card">
+      <div class="chain">
+        <div class="chain-item">
+          <div class="chain-label">子系统（交付单位）</div>
+          <div class="chain-value muted">
+            {{ model.subsystem.implemented ? '已建实体' : '未建实体（交付单位）' }}
+          </div>
+          <div class="chain-note">业务域由模块 Level1 承载：{{ model.modules.level1 }} 个</div>
+        </div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-item">
+          <div class="chain-label">功能模块</div>
+          <div class="chain-value">{{ model.modules.total }}</div>
+          <div class="chain-note">
+            一级 {{ model.modules.level1 }} · 二级 {{ model.modules.level2 }} · 三级 {{ model.modules.level3 }}
+          </div>
+        </div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-item">
+          <div class="chain-label">功能点 / 动作链</div>
+          <div class="chain-value">{{ model.functions.total }} / {{ model.functions.actions }}</div>
+          <div class="chain-note">
+            权限点 MOD:{{ model.permissions.mod }} · FUN:{{ model.permissions.fun }}
+          </div>
+        </div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-item">
+          <div class="chain-label">菜单（绑定 / 未绑）</div>
+          <div class="chain-value">
+            {{ model.menus.boundToModule }} / <span :class="{ danger: model.menus.unboundModule > 0 }">{{ model.menus.unboundModule }}</span>
+          </div>
+          <div class="chain-note">占位页 {{ model.menus.placeholder }} · 绑页面 {{ model.menus.boundToPage }}</div>
+        </div>
+        <div class="chain-arrow">→</div>
+        <div class="chain-item">
+          <div class="chain-label">终端可见性</div>
+          <div class="chain-value">{{ model.terminals.menuTerminalRows }} 条</div>
+          <div class="chain-note">
+            菜单层生效 · 模块层 {{ model.terminals.moduleTerminalRows }} 条
+          </div>
+        </div>
+      </div>
+      <el-alert
+        v-for="(w, i) in model.warnings"
+        :key="i"
+        :title="w"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="warn-line"
+      />
+    </el-card>
+
     <el-row :gutter="12">
       <el-col :span="10">
         <el-card shadow="never" class="panel">
@@ -312,6 +365,7 @@ import {
   moduleAdminApi,
   type ActionBody,
   type FunctionDto,
+  type ModelMap,
   type ModuleNode
 } from '../../api/admin'
 
@@ -320,6 +374,7 @@ const functions = ref<FunctionDto[]>([])
 const currentModule = ref<ModuleNode | null>(null)
 const keyword = ref('')
 const stats = ref<Record<string, number> | null>(null)
+const model = ref<ModelMap | null>(null)
 const saving = ref(false)
 const expandedKeys = ref<number[]>([])
 
@@ -368,6 +423,7 @@ async function loadTree() {
   try {
     tree.value = await moduleAdminApi.tree(keyword.value || undefined)
     stats.value = await moduleAdminApi.overview()
+    model.value = await moduleAdminApi.modelMap()
     if (currentModule.value) {
       const found = findNode(tree.value, currentModule.value.id)
       if (found) {
@@ -611,6 +667,15 @@ onMounted(loadTree)
 .head h2 { margin: 0; font-size: 18px; }
 .sub { margin: 4px 0 0; font-size: 12px; color: var(--el-text-color-secondary); }
 .stats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.model-card { margin-bottom: 12px; }
+.chain { display: flex; align-items: stretch; gap: 8px; flex-wrap: wrap; }
+.chain-item { flex: 1 1 150px; border: 1px solid var(--el-border-color-lighter); border-radius: 6px; padding: 8px 10px; }
+.chain-label { font-size: 11px; color: var(--el-text-color-secondary); }
+.chain-value { font-size: 18px; font-weight: 600; margin: 2px 0; }
+.chain-note { font-size: 11px; color: var(--el-text-color-secondary); }
+.chain-arrow { display: flex; align-items: center; color: var(--el-text-color-placeholder); }
+.warn-line { margin-top: 8px; }
+.danger { color: var(--el-color-danger); font-weight: 600; }
 .panel { height: 100%; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .head-actions { display: flex; gap: 8px; align-items: center; }

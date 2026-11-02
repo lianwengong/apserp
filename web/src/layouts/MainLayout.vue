@@ -59,7 +59,13 @@ const groups = computed(() => {
 })
 
 const menuKeyword = ref('')
-const filteredMenus = computed(() => filterMenuTree(menus.state.tree, menuKeyword.value))
+const platformRoot = computed(() => menus.state.tree.find((node) => node.code === '90') ?? null)
+const businessMenus = computed(() =>
+  filterMenuTree(
+    menus.state.tree.filter((node) => node.code !== '90'),
+    menuKeyword.value
+  )
+)
 
 onMounted(async () => {
   void catalog.load()
@@ -239,49 +245,52 @@ function onUserCommand(command: string): void {
         <nav v-if="!collapsed" class="menu">
           <div class="menu-group">
             <div class="menu-group-label">
-              <el-icon><Setting /></el-icon>
-              <span>平台</span>
+              <el-icon><HomeFilled /></el-icon>
+              <span>工作台</span>
             </div>
-            <router-link to="/design" class="menu-item" :class="{ active: route.path === '/design' }">
+            <router-link
+              to="/todo"
+              class="menu-item"
+              :class="{ active: route.path === '/todo' }"
+            >
               <span class="dot" />
-              <span class="item-name">设计器中心</span>
-              <span class="item-code mono">design</span>
+              <span class="item-name">我的待办</span>
+              <span class="item-code mono">todo</span>
             </router-link>
-            <router-link to="/workflow" class="menu-item" :class="{ active: route.path === '/workflow' }">
+            <router-link
+              to="/workflow"
+              class="menu-item"
+              :class="{ active: route.path === '/workflow' }"
+            >
               <span class="dot" />
               <span class="item-name">流程中心</span>
               <span class="item-code mono">flow</span>
             </router-link>
-            <router-link
-              to="/system/modules"
-              class="menu-item"
-              :class="{ active: route.path === '/system/modules' }"
-            >
-              <span class="dot" />
-              <span class="item-name">功能模块管理</span>
-              <span class="item-code mono">module</span>
-            </router-link>
-            <router-link
-              to="/system/menus"
-              class="menu-item"
-              :class="{ active: route.path === '/system/menus' }"
-            >
-              <span class="dot" />
-              <span class="item-name">菜单设置</span>
-              <span class="item-code mono">menu</span>
-            </router-link>
+          </div>
+
+          <div v-if="platformRoot" class="menu-group">
+            <div class="menu-group-label">
+              <el-icon><Setting /></el-icon>
+              <span>平台管理</span>
+            </div>
+            <MenuTree
+              :nodes="platformRoot.children"
+              :current-path="route.path"
+              :force-expand="false"
+              @select="openMenu"
+            />
           </div>
 
           <div class="menu-group">
             <div class="menu-group-label">
               <el-icon><Grid /></el-icon>
-              <span>功能菜单</span>
+              <span>业务菜单</span>
             </div>
             <el-input
               v-model="menuKeyword"
               class="menu-search"
               size="small"
-              placeholder="搜索模块 / 功能"
+              placeholder="搜索业务模块 / 功能"
               clearable
             >
               <template #prefix>
@@ -289,17 +298,17 @@ function onUserCommand(command: string): void {
               </template>
             </el-input>
             <MenuTree
-              :nodes="filteredMenus"
+              :nodes="businessMenus"
               :current-path="route.path"
               :force-expand="menuKeyword.length > 0"
               @select="openMenu"
             />
-            <div v-if="menus.state.loading" class="menu-hint">正在加载功能菜单…</div>
+            <div v-if="menus.state.loading" class="menu-hint">正在加载业务菜单…</div>
             <div v-else-if="menus.state.error" class="menu-hint is-error">
               {{ menus.state.error }}
             </div>
-            <div v-else-if="!filteredMenus.length" class="menu-hint">
-              {{ menuKeyword ? '没有匹配的功能' : '尚无功能菜单' }}
+            <div v-else-if="!businessMenus.length" class="menu-hint">
+              {{ menuKeyword ? '没有匹配的功能' : '尚无业务菜单' }}
             </div>
           </div>
 

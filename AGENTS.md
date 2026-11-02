@@ -109,6 +109,8 @@ src/test/java/com/apserp/
 | 2026-11-02 | 改模块编码后权限点没跟着改：`UPDATE` 里用 `SELECT CONCAT('MOD:', Code)` 读的是**改后**的编码，永远匹配不到旧权限点 | 改名迁移必须先查旧编码再迁移；并且 `String.replace` 全局替换会把同样的补丁打进另一个方法（本次误插进 `saveFunction`），改完要 grep 确认只改到目标位置 |
 | 2026-11-02 | Playwright 点保存后弹窗没关就去点树节点：`.el-dialog input` 命中的是**已隐藏**的上一个对话框（Element Plus 关闭后仍在 DOM），报 `not editable` / `intercepts pointer events` | 选择器一律加 `:visible`（`.el-dialog:visible ...`）；E2E 用时间戳做编码后缀，避免重复运行撞唯一键 |
 | 2026-11-02 | 菜单「上移/下移」不是简单 `Sort-10`：并发或跳跃时会与兄弟重排、甚至把 Sort 算成负数 | 交换两个兄弟的 Sort（各发一次 move），服务端只校验父节点与成环；不要在前端推算排序值 |
+| 2026-11-02 | 「模块 vs 菜单 vs 终端 vs 子系统」四者关系靠口口相传：模块 636 条与菜单 636 条 1:1 双写、`ModuleTerminal` 空表却有 1058 条菜单终端、41 条平台菜单不绑模块 | 关系与实测数字整理进 `docs/model-module-subsystem-menu-terminal.md`；新增 `GET /api/admin/modules/model-map` 暴露规模与「未接通」警告（未绑模块 / 占位页 / 空表），管理窗口顶部直接显示，避免再靠人查表 |
+| 2026-11-02 | 侧边栏同时有硬编码「平台」组和「功能菜单 → 平台管理」，平台树根又和组标题重复，看起来像两套平台入口 | 重组为「工作台 / 平台管理 / 业务菜单 / 基础资料」四组；平台组直接渲染子模块；流程中心/待办归工作台；模块管理、菜单设置指向 `/system/modules`、`/system/menus`；01 根改名「主数据」（V39/V40） |
 
 
 

@@ -497,6 +497,91 @@ public class ModuleAdminService {
         log.info("permission_created tenant={} key={}", tenantId, resourceKey);
     }
 
+    /**
+     * 模型关系图的数据源：把「子系统 / 模块 / 功能点 / 菜单 / 终端」的实际规模与连接情况
+     * 一次性查出来，供管理窗口和排障使用。
+     *
+     * <p>为什么需要它：这四者分散在 6 张表里，靠人记不住；尤其
+     * 「菜单有没有绑模块/页面」「模块终端是不是空表」这两件事，不看数字根本发现不了。</p>
+     */
+    public Map<String, Object> modelMap() {
+        long tenantId = TenantContext.requireTenantId();
+        Map<String, Object> m = new LinkedHashMap<>();
+
+        Map<String, Object> modules = new LinkedHashMap<>();
+        modules.put("total", count("SELECT COUNT(*) FROM plat.[Module] WHERE TenantId = ? AND IsDeleted = 0", tenantId));
+        modules.put("level1", count("SELECT COUNT(*) FROM plat.[Module] WHERE TenantId = ? AND IsDeleted = 0 AND [Level] = 1", tenantId));
+        modules.put("level2", count("SELECT COUNT(*) FROM plat.[Module] WHERE TenantId = ? AND IsDeleted = 0 AND [Level] = 2", tenantId));
+        modules.put("level3", count("SELECT COUNT(*) FROM plat.[Module] WHERE TenantId = ? AND IsDeleted = 0 AND [Level] >= 3", tenantId));
+        m.put("modules", modules);
+
+        Map<String, Object> functions = new LinkedHashMap<>();
+        functions.put("total", count("SELECT COUNT(*) FROM plat.ModuleFunction WHERE TenantId = ? AND IsDeleted = 0", tenantId));
+        functions.put("actions", count("SELECT COUNT(*) FROM plat.FunctionAction a JOIN plat.ModuleFunction f "
+                + "ON f.Id = a.FunctionId WHERE f.TenantId = ? AND f.IsDeleted = 0", tenantId));
+        m.put("functions", functions);
+
+        Map<String, Object> menus = new LinkedHashMap<>();
+        menus.put("total", count("SELECT COUNT(*) FROM plat.[Menu] WHERE TenantId = ? AND IsDeleted = 0", tenantId));
+        menus.put("boundToModule", count("SELECT COUNT(*) FROM plat.[Menu] WHERE TenantId = ? AND IsDeleted = 0 "
+                + "AND ModuleId IS NOT NULL", tenantId));
+        menus.put("unboundModule", count("SELECT COUNT(*) FROM plat.[Menu] WHERE TenantId = ? AND IsDeleted = 0 "
+                + "AND ModuleId IS NULL", tenantId));
+        menus.put("boundToPage", count("SELECT COUNT(*) FROM plat.[Menu] WHERE TenantId = ? AND IsDeleted = 0 "
+                + "AND PageId IS NOT NULL", tenantId));
+        menus.put("placeholder", count("SELECT COUNT(*) FROM plat.[Menu] WHERE TenantId = ? AND IsDeleted = 0 "
+                + "AND PageId IS NULL AND (Route IS NULL OR Route = '' OR Route LIKE '/m/%')", tenantId));
+        m.put("menus", menus);
+
+        Map<String, Object> terminals = new LinkedHashMap<>();
+        terminals.put("menuTerminalRows", count("SELECT COUNT(*) FROM plat.MenuTerminal mt "
+                + "JOIN plat.[Menu] mn ON mn.Id = mt.MenuId WHERE mn.TenantId = ? AND mn.IsDeleted = 0", tenantId));
+        terminals.put("moduleTerminalRows", count("SELECT COUNT(*) FROM plat.ModuleTerminal mt "
+                + "JOIN plat.[Module] md ON md.Id = mt.ModuleId WHERE md.TenantId = ? AND md.IsDeleted = 0", tenantId));
+        List<Map<String, Object>> byType = jdbc.queryForList("""
+                SELECT mt.TerminalType AS terminalType, COUNT(*) AS menus
+                FROM plat.MenuTerminal mt JOIN plat.[Menu] mn ON mn.Id = mt.MenuId
+                WHERE mn.TenantId = ? AND mn.IsDeleted = 0
+                GROUP BY mt.TerminalType ORDER BY mt.TerminalType
+                """, tenantId);
+        terminals.put("byType", byType);
+        m.put("terminals", terminals);
+
+        Map<String, Object> permissions = new LinkedHashMap<>();
+        permissions.put("mod", count("SELECT COUNT(*) FROM plat.Permission WHERE TenantId = ? AND ResourceKey LIKE 'MOD:%'", tenantId));
+        permissions.put("fun", count("SELECT COUNT(*) FROM plat.Permission WHERE TenantId = ? AND ResourceKey LIKE 'FUN:%'", tenantId));
+        permissions.put("data", count("SELECT COUNT(*) FROM plat.Permission WHERE TenantId = ? AND ResourceKey LIKE 'DATA:%'", tenantId));
+        permissions.put("design", count("SELECT COUNT(*) FROM plat.Permission WHERE TenantId = ? AND ResourceKey LIKE 'DESIGN:%'", tenantId));
+        m.put("permissions", permissions);
+
+        // 子系统：当前没有实体表，只有方案里的 57 个划分；这里如实返回「无」，
+        // 避免管理窗口凭空造一个不存在的层级。
+        m.put("subsystem", Map.of(
+                "implemented", false,
+                "note", "子系统是交付/验收单位（方案里 57 个），当前未建实体；业务域由模块 Level1（10 个）承载"));
+
+        m.put("warnings", modelWarnings(menus, terminals));
+        return m;
+    }
+
+    /** 把「看起来能用其实没接通」的地方直接点出来，省得靠人逐个表去查。 */
+    private List<String> modelWarnings(Map<String, Object> menus, Map<String, Object> terminals) {
+        List<String> out = new java.util.ArrayList<>();
+        int unbound = ((Number) menus.getOrDefault("unboundModule", 0)).intValue();
+        if (unbound > 0) {
+            out.add("有 " + unbound + " 条菜单没有绑定模块，无法用 MOD:/FUN: 授权（只能平台管理员整体放行）");
+        }
+        int placeholder = ((Number) menus.getOrDefault("placeholder", 0)).intValue();
+        if (placeholder > 0) {
+            out.add("有 " + placeholder + " 条菜单没有真实页面，点击落到 /m/{code} 占位页");
+        }
+        int moduleTerminal = ((Number) terminals.getOrDefault("moduleTerminalRows", 0)).intValue();
+        if (moduleTerminal == 0) {
+            out.add("plat.ModuleTerminal 是空表：终端差异只在菜单层生效，按模块配终端不会起作用");
+        }
+        return out;
+    }
+
     /** 功能点在权限设计器里的动作码（read/write/approve 等由角色矩阵控制，这里只提示）。 */
     public Map<String, Object> overview() {
         long tenantId = TenantContext.requireTenantId();
