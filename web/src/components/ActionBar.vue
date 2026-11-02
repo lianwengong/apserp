@@ -24,12 +24,14 @@
 
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { runtimeApi, type ResolvedButton, type ResolvedAction } from '../api/runtime'
+import { runtimeApi, type ResolvedAction, type ResolvedButton } from '../api/runtime'
 
 /**
- * 行内动作条：按钮完全来自后端元数据（含权限点与可见/可用表达式），
- * 前端不写死任何按钮。当前支持内置动作：OPEN_FORM / DELETE / SUBMIT / EXPORT / REFRESH。
+ * 行内动作条：按钮完全来自后端元数据（含权限点与可见/可用表达式），前端不写死任何按钮。
+ * 动作语义统一由后端 `POST /api/runtime/action/execute` 决定（内置/导航/命令/脚本），
+ * 前端只按返回的 kind 做跳转、下载、刷新或提示。
  */
 const props = defineProps<{
   objectCode: string
@@ -42,14 +44,14 @@ const emit = defineEmits<{
   (e: 'submitted', instanceId: number): void
 }>()
 
+const router = useRouter()
 const buttons = ref<ResolvedButton[]>([])
 const busy = ref('')
 
 async function load() {
-  const id = props.row ? Number(props.row['Id'] ?? 0) : undefined
+  const raw = props.row ? Number(props.row['Id'] ?? 0) : 0
   try {
-    const list = await runtimeApi.buttons(props.objectCode, id && id > 0 ? id : undefined)
-    buttons.value = list.slice(0, 5)
+    buttons.value = (await runtimeApi.buttons(props.objectCode, raw > 0 ? raw : undefined)).slice(0, 5)
   } catch {
     buttons.value = []
   }
@@ -63,87 +65,90 @@ function confirmOf(actions: ResolvedAction[]): string | null {
 }
 
 /**
- * 是否需要二次确认：只有「会改数据」的动作才弹。
- * 导航类（打开发表单）与刷新类动作弹确认纯属打扰——前者曾把说明文案当确认框弹出来。
+ * 确认文案：只有「会改数据」的动作才可能弹框，且只在设计器写了文案
+ * 或这是删除动作时才弹；打开发表单/刷新/导出属于读操作，不打扰。
  */
-function needsConfirm(action: ResolvedAction): boolean {
-  if (action.actionType === 2) return false                       // 导航
-  if (action.builtinCode && ['OPEN_FORM', 'REFRESH', 'CLOSE'].includes(action.builtinCode)) return false
-  return true
+function confirmTextOf(action: ResolvedAction, actions: ResolvedAction[], btnText: string): string | null {
+  if (action.actionType === 2) return null
+  if (action.builtinCode && ['OPEN_FORM', 'REFRESH', 'CLOSE', 'EXPORT'].includes(action.builtinCode)) {
+    return null
+  }
+  return confirmOf(actions) ?? (action.builtinCode === 'DELETE' ? `${btnText}，确认继续？` : null)
+}
+
+/** 带 token 下载：导出接口需要鉴权，不能直接用 window.open。 */
+async function download(url: string) {
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}` }
+  })
+  if (!res.ok) throw new Error(`导出失败（HTTP ${res.status}）`)
+  const blob = await res.blob()
+  const name = url.includes('objectCode=')
+    ? decodeURIComponent(url.split('objectCode=')[1].split('&')[0]).replace('.', '_') + '.csv'
+    : 'export.csv'
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = name
+  link.click()
+  URL.revokeObjectURL(link.href)
 }
 
 async function run(btn: ResolvedButton) {
   const action = btn.actions[0]
   if (!action) return
-  if (needsConfirm(action)) {
-    const ask = confirmOf(btn.actions) ?? `${btn.text}，确认继续？`
+
+  // 打开发表单是纯前端行为（弹出编辑框），不必绕服务端
+  if (action.builtinCode === 'OPEN_FORM') {
+    if (props.row) emit('open-form', props.row)
+    return
+  }
+
+  const ask = confirmTextOf(action, btn.actions, btn.text)
+  if (ask) {
     try {
       await ElMessageBox.confirm(ask, btn.text, { type: 'warning' })
     } catch {
       return
     }
   }
+
   busy.value = btn.code
   try {
-    switch (action.builtinCode) {
-      case 'OPEN_FORM':
-        if (props.row) emit('open-form', props.row)
+    const id = Number(props.row?.['Id'] ?? 0)
+    const result = await runtimeApi.executeAction({
+      objectCode: props.objectCode,
+      id: id > 0 ? id : null,
+      buttonCode: btn.code,
+      params: {
+        businessNo: props.row?.['Code'] ?? props.row?.['DocNo'] ?? null,
+        title: `${props.objectCode} ${props.row?.['Code'] ?? ''}`
+      }
+    })
+    switch (result.kind) {
+      case 'navigate':
+        if (result.route) await router.push(result.route)
         break
-      case 'DELETE':
-        await doDelete()
+      case 'download':
+        if (result.downloadUrl) await download(result.downloadUrl)
+        ElMessage.success('导出已开始下载')
         break
-      case 'SUBMIT':
-        await doSubmit(action)
-        break
-      case 'REFRESH':
+      case 'refresh':
+        ElMessage.success(result.message || '已执行')
         emit('refresh')
         break
-      case 'EXPORT':
-        ElMessage.success(action.successMessage || '导出任务已提交（本期为占位实现）')
+      case 'message':
+        ElMessage.info(result.message || '已执行')
         break
       default:
-        ElMessage.info(`动作 ${action.builtinCode ?? action.command ?? '未知'} 暂未实现`)
+        ElMessage.success(result.message || '已执行')
     }
+    const instanceId = result.data?.instanceId
+    if (typeof instanceId === 'number') emit('submitted', instanceId)
   } catch (e) {
     ElMessage.error((e as Error).message)
   } finally {
     busy.value = ''
   }
-}
-
-async function doDelete() {
-  const id = Number(props.row?.['Id'] ?? 0)
-  if (!id) return ElMessage.warning('缺少主键，无法删除')
-  const rowNo = props.row?.['Code'] ?? props.row?.['Name'] ?? id
-  await ElMessageBox.confirm(`确认删除 ${String(rowNo)}？`, '删除', { type: 'warning' })
-  // 删除走保存引擎的“标记删除”语义：提交 IsDeleted=1，由后端规则/权限把关
-  await fetch(`/api/meta/${encodeURIComponent(props.objectCode)}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json;charset=UTF-8',
-      Authorization: `Bearer ${localStorage.getItem('apserp.token') ?? ''}`
-    },
-    body: JSON.stringify({ Id: id, IsDeleted: true })
-  })
-  ElMessage.success('已删除')
-  emit('refresh')
-}
-
-async function doSubmit(action: ResolvedAction) {
-  const row = props.row
-  if (!row) return ElMessage.warning('请先选择一行')
-  const id = Number(row['Id'] ?? 0)
-  if (!id) return ElMessage.warning('缺少主键，无法提交')
-  const businessNo = String(row['Code'] ?? row['DocNo'] ?? '')
-  const r = await runtimeApi.submit({
-    objectCode: props.objectCode,
-    businessId: id,
-    businessNo,
-    title: `${props.objectCode} ${businessNo}`
-  })
-  ElMessage.success(action.successMessage || '已提交审批')
-  emit('submitted', r.instanceId)
-  emit('refresh')
 }
 
 watch(() => props.row, load, { deep: true })

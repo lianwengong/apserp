@@ -133,18 +133,23 @@
               <el-table-column label="内置动作/命令" min-width="150">
                 <template #default="{ row }">
                   <el-select
-                    v-if="row.actionType === 1 || row.actionType === 4"
+                    v-if="row.actionType === 1"
                     v-model="row.builtinCode"
                     size="small"
                     allow-create
                     filterable
                   >
-                    <el-option
-                      v-for="c in row.actionType === 1 ? BUILTINS : WHITELIST"
-                      :key="c"
-                      :value="c"
-                      :label="c"
-                    />
+                    <el-option v-for="c in BUILTINS" :key="c" :value="c" :label="c" />
+                  </el-select>
+                  <el-select
+                    v-else-if="row.actionType === 3 || row.actionType === 4"
+                    v-model="row.command"
+                    size="small"
+                    allow-create
+                    filterable
+                    placeholder="选择服务端命令"
+                  >
+                    <el-option v-for="c in commands" :key="c" :value="c" :label="c" />
                   </el-select>
                   <el-input v-else v-model="row.target" size="small" placeholder="/object/md.brand" />
                 </template>
@@ -177,16 +182,18 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { designApi, type ActionForm, type ButtonDto } from '../../api/design'
+import { runtimeApi } from '../../api/runtime'
 import { metaApi } from '../../api/definition'
 import type { DataObjectDto } from '../../api/types'
 
 const BUILTINS = ['OPEN_FORM', 'DELETE', 'SUBMIT', 'EXPORT', 'REFRESH', 'CLOSE']
-const WHITELIST = ['PRINT', 'EXPORT', 'REFRESH', 'SYNC', 'COPY', 'NOTIFY']
 
 
 const objects = ref<DataObjectDto[]>([])
 const buttons = ref<ButtonDto[]>([])
 const functions = ref<{ id: number; code: string; name: string }[]>([])
+/** 服务端已注册的命令（命令/脚本动作的下拉项，避免填了跑不起来的名字） */
+const commands = ref<string[]>([])
 const objectCode = ref('')
 const editing = ref(false)
 const saving = ref(false)
@@ -283,6 +290,7 @@ async function load() {
     if (!objectCode.value && objects.value.length) objectCode.value = objects.value[0].code
     buttons.value = await designApi.buttons(objectCode.value)
     functions.value = await designApi.buttonFunctions(objectCode.value)
+    commands.value = await runtimeApi.commands()
   } catch (e) {
     ElMessage.error((e as Error).message)
   }

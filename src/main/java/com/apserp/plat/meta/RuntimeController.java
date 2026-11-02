@@ -40,16 +40,56 @@ public class RuntimeController {
     private final ApprovalService approvalService;
     private final MetaQueryService queryService;
     private final MetaChildService childService;
+    private final ActionExecutor actionExecutor;
     private final PermissionService permissionService;
 
     public RuntimeController(ActionService actionService, ApprovalService approvalService,
                              MetaQueryService queryService, MetaChildService childService,
-                             PermissionService permissionService) {
+                             ActionExecutor actionExecutor, PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
         this.childService = childService;
+        this.actionExecutor = actionExecutor;
         this.permissionService = permissionService;
+    }
+
+    // ---------------------------------------------------------------- 动作执行
+
+    /**
+     * 执行按钮上配置的动作链（内置/导航/命令/脚本）。
+     *
+     * <p>前端不再自己实现动作语义：点按钮 → 调这个接口 → 按返回的 kind 跳转/下载/刷新。</p>
+     */
+    @PostMapping("/action/execute")
+    public ApiResult<ActionExecutor.ExecuteResult> execute(@RequestBody ActionExecutor.ExecuteRequest body) {
+        return ApiResult.ok(actionExecutor.execute(body));
+    }
+
+    /** 已注册的服务端命令（脚本动作白名单，设计器下拉用）。 */
+    @GetMapping("/action/commands")
+    public ApiResult<List<String>> commands() {
+        return ApiResult.ok(actionExecutor.availableCommands());
+    }
+
+    /**
+     * CSV 导出：列取默认列表视图，UTF-8 BOM，最多 5000 行。
+     * 直接返回文件流，不走 ApiResult（否则前端要先解析 JSON 再 blob）。
+     */
+    @GetMapping("/export")
+    public org.springframework.http.ResponseEntity<byte[]> export(
+            @RequestParam String objectCode,
+            @RequestParam(required = false) String filters,
+            @RequestParam(required = false) String sort,
+            @RequestParam(required = false, defaultValue = "5000") int maxRows) {
+        String csv = actionExecutor.exportCsv(objectCode, filters, sort, maxRows);
+        String fileName = objectCode.replace('.', '_') + "-"
+                + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss"))
+                + ".csv";
+        return org.springframework.http.ResponseEntity.ok()
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
+                .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // ---------------------------------------------------------------- 子表

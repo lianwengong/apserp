@@ -4,6 +4,15 @@ export const runtimeApi = {
   children: (objectCode: string, id: number) =>
     request<ChildGroup[]>(`/api/runtime/children${queryString({ objectCode, id })}`),
 
+  executeAction: (body: {
+    objectCode: string
+    id?: number | null
+    buttonCode: string
+    params?: Record<string, unknown>
+  }) => request<ExecuteResult>('/api/runtime/action/execute', { method: 'POST', body }),
+
+  commands: () => request<string[]>('/api/runtime/action/commands'),
+
   buttons: (objectCode: string, id?: number) =>
     request<ResolvedButton[]>(`/api/runtime/buttons${queryString({ objectCode, id })}`),
 
@@ -43,6 +52,15 @@ export const runtimeApi = {
 
   instance: (instanceId: number) =>
     request<ApprovalInstance>(`/api/runtime/workflow/instances/${instanceId}`)
+}
+
+export interface ExecuteResult {
+  kind: 'navigate' | 'download' | 'refresh' | 'message' | 'close'
+  message: string | null
+  route: string | null
+  downloadUrl: string | null
+  data: Record<string, unknown>
+  refresh: boolean
 }
 
 export interface ChildGroup {
