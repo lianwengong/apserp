@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import ChildTables from './ChildTables.vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import type {
   DataObjectDto,
@@ -65,6 +66,13 @@ const layout = computed<FormLayoutDto | null>(() => {
 const layoutColumns = computed(() => Math.min(Math.max(layout.value?.columns ?? 1, 1), 3))
 
 const isEditing = computed(() => props.row !== null)
+/** 明细数据：按关系别名分组，随主表一起提交。 */
+const childRows = ref<Record<string, Record<string, unknown>[]>>({})
+const parentId = computed<number | null>(() => {
+  if (!props.row || !props.object) return null
+  const id = Number(props.row[props.object.primaryKey] ?? 0)
+  return id > 0 ? id : null
+})
 
 const title = computed(() => `${isEditing.value ? '编辑' : '新增'}${props.object?.name ?? ''}`)
 
@@ -276,6 +284,11 @@ async function submit(): Promise<void> {
     payload[field.fieldName] = value
   }
 
+  // 明细：只提交本次加载/编辑过的别名（后端约定：没出现的别名不动）
+  for (const [alias, rows] of Object.entries(childRows.value)) {
+    payload[alias] = rows
+  }
+
   saving.value = true
   try {
     await saveRow(props.object.code, payload)
@@ -420,6 +433,14 @@ watch(
         </el-form-item>
       </div>
     </el-form>
+
+    <ChildTables
+      v-if="object"
+      :key="`${object.code}-${parentId ?? 'new'}`"
+      v-model="childRows"
+      :object-code="object.code"
+      :parent-id="parentId"
+    />
 
     <template #footer>
       <el-button @click="visible = false">取消</el-button>

@@ -62,11 +62,21 @@ function confirmOf(actions: ResolvedAction[]): string | null {
   return null
 }
 
+/**
+ * 是否需要二次确认：只有「会改数据」的动作才弹。
+ * 导航类（打开发表单）与刷新类动作弹确认纯属打扰——前者曾把说明文案当确认框弹出来。
+ */
+function needsConfirm(action: ResolvedAction): boolean {
+  if (action.actionType === 2) return false                       // 导航
+  if (action.builtinCode && ['OPEN_FORM', 'REFRESH', 'CLOSE'].includes(action.builtinCode)) return false
+  return true
+}
+
 async function run(btn: ResolvedButton) {
   const action = btn.actions[0]
   if (!action) return
-  const ask = confirmOf(btn.actions)
-  if (ask) {
+  if (needsConfirm(action)) {
+    const ask = confirmOf(btn.actions) ?? `${btn.text}，确认继续？`
     try {
       await ElMessageBox.confirm(ask, btn.text, { type: 'warning' })
     } catch {

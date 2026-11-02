@@ -16,6 +16,9 @@
       <el-tab-pane label="字段设计器" name="field">
         <FieldDesigner />
       </el-tab-pane>
+      <el-tab-pane label="子表设计器" name="relation">
+        <RelationDesigner />
+      </el-tab-pane>
       <el-tab-pane label="规则设计器" name="rule">
         <RuleDesigner />
       </el-tab-pane>
@@ -40,13 +43,14 @@ import { onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { designApi } from '../../api/design'
 import FieldDesigner from './FieldDesigner.vue'
+import RelationDesigner from './RelationDesigner.vue'
 import RuleDesigner from './RuleDesigner.vue'
 import ButtonDesigner from './ButtonDesigner.vue'
 import ApprovalDesigner from './ApprovalDesigner.vue'
 import PermissionDesigner from './PermissionDesigner.vue'
 import PublishDesigner from './PublishDesigner.vue'
 
-const TAB_KEYS = ['field', 'rule', 'button', 'approval', 'permission', 'publish'] as const
+const TAB_KEYS = ['field', 'relation', 'rule', 'button', 'approval', 'permission', 'publish'] as const
 const route = useRoute()
 const router = useRouter()
 const tab = ref<string>('field')
@@ -55,6 +59,7 @@ const stats = ref<Record<string, number> | null>(null)
 const statLabels: Record<string, string> = {
   objects: '对象',
   fields: '字段',
+  relations: '子表',
   rules: '规则',
   buttons: '按钮',
   workflows: '审批流',

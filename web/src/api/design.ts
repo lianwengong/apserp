@@ -4,6 +4,14 @@ import { request, queryString } from './http'
 export const designApi = {
   overview: () => request<Record<string, number>>('/api/design/overview'),
 
+  // ---------------- 子表关系
+  relations: (objectCode?: string) =>
+    request<RelationDto[]>(`/api/design/relations${queryString({ objectCode })}`),
+  saveRelation: (body: RelationSaveBody) =>
+    request<{ id: number }>('/api/design/relations', { method: 'POST', body }),
+  deleteRelation: (id: number) =>
+    request<void>(`/api/design/relations/${id}`, { method: 'DELETE' }),
+
   // ---------------- 规则
   rules: () => request<RuleDto[]>('/api/design/rules'),
   saveRule: (body: RuleSaveBody) =>
@@ -287,6 +295,34 @@ export interface DiffResult {
   fromVersion: number | null
   toVersion: number | null
   items: { kind: string; action: string; code: string }[]
+}
+
+export interface RelationDto {
+  id: number
+  parentObjectCode: string
+  childObjectCode: string
+  childObjectName: string | null
+  alias: string
+  foreignKeyField: string
+  displayName: string | null
+  sort: number
+  cascadeDelete: number
+  maxRows: number
+  enabled: boolean
+}
+
+export interface RelationSaveBody {
+  id?: number | null
+  parentObjectCode: string
+  childObjectCode: string
+  alias: string
+  foreignKeyField: string
+  displayName?: string | null
+  sort: number
+  cascadeDelete: number
+  maxRows: number
+  enabled: boolean
+  remark?: string | null
 }
 
 export interface RoleDto {

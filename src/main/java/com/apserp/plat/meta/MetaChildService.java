@@ -252,6 +252,7 @@ public class MetaChildService {
                 row.put(rel.foreignKeyField(), parentId);
                 row.put(tenantFieldOf(rel.childObjectCode()), tenantId);
                 row.remove("RowVersion");   // 子行整体覆盖，不做逐行乐观锁
+                stripNullsOnRequired(rel.childObjectCode(), row);
                 ruleService.checkBeforeSave(rel.childObjectCode(), row);
                 long childId = saveChild(rel.childObjectCode(), row, tenantId, userId);
                 kept.add(childId);
@@ -268,8 +269,26 @@ public class MetaChildService {
         }
     }
 
-    private long saveChild(String childObjectCode, Map<String, Object> row, long tenantId, Long userId) {
-        String childJson;
+    /**
+     * 去掉「非空字段上的 null 值」，让数据库默认值生效。
+     *
+     * <p>明细表格里没填的数字列前端会传 null；直接写进 INSERT 会顶掉列默认值，
+     * 变成「不能将值 NULL 插入列 Sort」这类用户看不懂的 500。约定：null 视为「没填」，
+     * 交给默认值；真要写 null 请把字段声明为可空。</p>
+     */
+    private void stripNullsOnRequired(String childObjectCode, Map<String, Object> row) {
+        List<MetaDefinitionService.FieldDto> fields = definitionService.listFields(childObjectCode);
+        for (MetaDefinitionService.FieldDto field : fields) {
+            if (field.nullable() || field.primaryKey() || field.identity()) {
+                continue;
+            }
+            if (row.get(field.fieldName()) == null) {
+                row.remove(field.fieldName());
+            }
+        }
+    }
+
+    private long saveChild(String childObjectCode, Map<String, Object> row, long tenantId, Long userId) {        String childJson;
         try {
             childJson = json.writeValueAsString(row);
         } catch (Exception e) {

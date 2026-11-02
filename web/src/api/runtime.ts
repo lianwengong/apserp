@@ -1,7 +1,9 @@
 import { request, queryString } from './http'
 
-/** 运行时接口：按钮、审批、待办。 */
 export const runtimeApi = {
+  children: (objectCode: string, id: number) =>
+    request<ChildGroup[]>(`/api/runtime/children${queryString({ objectCode, id })}`),
+
   buttons: (objectCode: string, id?: number) =>
     request<ResolvedButton[]>(`/api/runtime/buttons${queryString({ objectCode, id })}`),
 
@@ -41,6 +43,16 @@ export const runtimeApi = {
 
   instance: (instanceId: number) =>
     request<ApprovalInstance>(`/api/runtime/workflow/instances/${instanceId}`)
+}
+
+export interface ChildGroup {
+  alias: string
+  childObjectCode: string
+  childObjectName: string | null
+  foreignKeyField: string
+  cascadeDelete: boolean
+  total: number
+  rows: Record<string, unknown>[]
 }
 
 export interface ResolvedAction {
