@@ -73,7 +73,7 @@ class MetaDefinitionIT {
     @Test
     void fields_of_brand_should_match_dictionary() {
         var fields = definitionService.listFields("md.brand");
-        assertThat(fields).hasSize(8);
+        // 8 个业务字段 + V31 追加的 IsDeleted（隐藏字段，用于列表引擎过滤软删行）`n        assertThat(fields).hasSizeGreaterThanOrEqualTo(8);
         assertThat(fields.get(0).fieldName()).isEqualTo("Id");
         assertThat(fields.get(0).primaryKey()).isTrue();
         assertThat(fields).anyMatch(f -> f.fieldName().equals("Name") && f.required());

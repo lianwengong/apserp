@@ -169,7 +169,7 @@ public class MetaPublishService {
     private DiffResult diff(Map<String, Object> a, Map<String, Object> b, Integer from, Integer to) {
         List<DiffItem> items = new ArrayList<>();
         for (String kind : List.of("objects", "fields", "listViews", "listViewColumns", "formLayouts",
-                "formFields", "buttons", "buttonActions", "rules", "ruleBindings",
+                "formFields", "relations", "buttons", "buttonActions", "rules", "ruleBindings",
                 "workflows", "workflowNodes", "workflowApprovers", "rolePermissions", "fieldPermissions")) {
             Map<String, String> left = flatten((List<Map<String, Object>>) a.getOrDefault(kind, List.of()));
             Map<String, String> right = flatten((List<Map<String, Object>>) b.getOrDefault(kind, List.of()));
@@ -293,6 +293,14 @@ public class MetaPublishService {
                 "SELECT r.Code AS RoleCode, fp.ObjectName, fp.FieldName, fp.Access FROM plat.FieldPermission fp "
                         + "JOIN plat.Role r ON r.Id = fp.RoleId WHERE fp." + t + " ORDER BY r.Code, fp.ObjectName, fp.FieldName");
 
+        List<Map<String, Object>> relations = jdbc.queryForList(
+                "SELECT p.Code AS ParentCode, ch.Code AS ChildCode, r.ChildAlias, r.ForeignKeyField, "
+                        + "r.DisplayName, r.Sort, r.CascadeDelete, r.MaxRows, r.IsEnabled "
+                        + "FROM plat.DataObjectRelation r JOIN plat.DataObject p ON p.Id = r.ParentObjectId "
+                        + "JOIN plat.DataObject ch ON ch.Id = r.ChildObjectId WHERE r." + t
+                        + " AND r.IsDeleted = 0 ORDER BY p.Code, r.Sort");
+
+        s.put("relations", relations);
         s.put("objects", objects);
         s.put("fields", fields);
         s.put("listViews", views);
@@ -341,6 +349,8 @@ public class MetaPublishService {
         jdbc.update("DELETE FROM plat.ListViewColumn WHERE ListViewId IN "
                 + "(SELECT Id FROM plat.ListView WHERE TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.ListView WHERE TenantId = ?", tenantId);
+        // 关系表外键指向 DataObject：必须先删关系再删对象，否则外键冲突
+        jdbc.update("DELETE FROM plat.DataObjectRelation WHERE TenantId = ?", tenantId);
         jdbc.update("DELETE FROM plat.DataObjectField WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
         // 数据对象本身也要清掉后按快照重建（保留原 Id 会与其它租户冲突，这里整体重建）
@@ -436,6 +446,22 @@ public class MetaPublishService {
                     bool(ff.get("IsRequired")), bool(ff.get("IsHidden")), ff.get("DefaultExpr"),
                     ff.get("Placeholder"), ff.get("HelpText"), ff.get("GroupName"), num(ff.get("Sort")),
                     ff.get("AccessExpr"));
+        }
+        // 主子表关系：父子对象都重建好之后再插回（外键依赖）
+        for (Map<String, Object> rel : (List<Map<String, Object>>) s.getOrDefault("relations", List.of())) {
+            Long parentId = objectIds.get(String.valueOf(rel.get("ParentCode")));
+            Long childId = objectIds.get(String.valueOf(rel.get("ChildCode")));
+            if (parentId == null || childId == null) {
+                continue;
+            }
+            jdbc.update("""
+                    INSERT plat.DataObjectRelation (TenantId, ParentObjectId, ChildObjectId, ChildAlias,
+                           ForeignKeyField, DisplayName, Sort, CascadeDelete, MaxRows, IsEnabled,
+                           IsDeleted, CreatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, sysutcdatetime())
+                    """, tenantId, parentId, childId, rel.get("ChildAlias"), rel.get("ForeignKeyField"),
+                    rel.get("DisplayName"), num(rel.get("Sort")), num(rel.get("CascadeDelete")),
+                    num(rel.get("MaxRows")), bool(rel.get("IsEnabled")));
         }
         for (Map<String, Object> b : (List<Map<String, Object>>) s.getOrDefault("buttons", List.of())) {
             jdbc.update("""

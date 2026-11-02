@@ -39,14 +39,32 @@ public class RuntimeController {
     private final ActionService actionService;
     private final ApprovalService approvalService;
     private final MetaQueryService queryService;
+    private final MetaChildService childService;
     private final PermissionService permissionService;
 
     public RuntimeController(ActionService actionService, ApprovalService approvalService,
-                             MetaQueryService queryService, PermissionService permissionService) {
+                             MetaQueryService queryService, MetaChildService childService,
+                             PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
+        this.childService = childService;
         this.permissionService = permissionService;
+    }
+
+    // ---------------------------------------------------------------- 子表
+
+    /**
+     * 某张单据的明细数据：按关系元数据分组返回，前端不硬编码子表。
+     * 用在「打开编辑表单」「查看单据」时加载明细。
+     */
+    @GetMapping("/children")
+    public ApiResult<List<MetaChildService.ChildGroup>> children(@RequestParam String objectCode,
+                                                                 @RequestParam long id) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
+        return ApiResult.ok(childService.childrenOf(objectCode, id));
     }
 
     // ---------------------------------------------------------------- 按钮

@@ -60,15 +60,18 @@ public class DesignerController {
     private final ApprovalService approvalService;
     private final MetaPublishService publishService;
     private final PermissionDesignService permissionDesign;
+    private final MetaChildService childService;
 
     public DesignerController(RuleService ruleService, ActionService actionService,
                               ApprovalService approvalService, MetaPublishService publishService,
-                              PermissionDesignService permissionDesign) {
+                              PermissionDesignService permissionDesign,
+                              MetaChildService childService) {
         this.ruleService = ruleService;
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.publishService = publishService;
         this.permissionDesign = permissionDesign;
+        this.childService = childService;
     }
 
     // ---------------------------------------------------------------- 概览
@@ -77,6 +80,41 @@ public class DesignerController {
     @RequiresPermission(value = "DESIGN:publish", action = "read")
     public ApiResult<Map<String, Object>> overview() {
         return ApiResult.ok(permissionDesign.overview());
+    }
+
+    // ---------------------------------------------------------------- 子表关系
+
+    @GetMapping("/relations")
+    @RequiresPermission(value = "DESIGN:page", action = "read")
+    public ApiResult<List<MetaChildService.RelationDto>> relations(
+            @RequestParam(required = false) String objectCode) {
+        return ApiResult.ok(childService.listRelations(objectCode));
+    }
+
+    @PostMapping("/relations")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Map<String, Long>> saveRelation(@RequestBody RelationBody body) {
+        long id = childService.saveRelation(new MetaChildService.RelationSaveRequest(
+                body.id(), body.parentObjectCode(), body.childObjectCode(), body.alias(),
+                body.foreignKeyField(), body.displayName(), body.sort(),
+                body.cascadeDelete() == null || body.cascadeDelete() <= 0 ? 1 : body.cascadeDelete(),
+                body.maxRows() == null ? 200 : body.maxRows(),
+                body.enabled(), body.remark()));
+        return ApiResult.ok(Map.of("id", id));
+    }
+
+    public record RelationBody(Long id, String parentObjectCode, String childObjectCode,
+                               String alias, String foreignKeyField, String displayName,
+                               Integer sort, Integer cascadeDelete, Integer maxRows,
+                               boolean enabled, String remark) {
+
+    }
+
+    @DeleteMapping("/relations/{id}")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Void> deleteRelation(@PathVariable long id) {
+        childService.deleteRelation(id);
+        return ApiResult.ok(null);
     }
 
     // ---------------------------------------------------------------- 规则

@@ -3,10 +3,7 @@ package com.apserp.plat.meta;
 import com.apserp.common.ApiException;
 import com.apserp.common.ErrorCode;
 import com.apserp.common.tenant.TenantContext;
-import java.sql.CallableStatement;
 import java.sql.Connection;
-import java.sql.SQLException;
-import java.sql.Types;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,14 +28,19 @@ public class MetaSaveService {
     private final JdbcTemplate jdbc;
     private final MetaDefinitionService definitionService;
     private final RuleService ruleService;
+    private final MetaChildService childService;
+    private final MetaSaveProc saveProc;
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper =
             new com.fasterxml.jackson.databind.ObjectMapper();
 
     public MetaSaveService(JdbcTemplate jdbc, MetaDefinitionService definitionService,
-                           RuleService ruleService) {
+                           RuleService ruleService, MetaChildService childService,
+                           MetaSaveProc saveProc) {
         this.jdbc = jdbc;
         this.definitionService = definitionService;
         this.ruleService = ruleService;
+        this.childService = childService;
+        this.saveProc = saveProc;
     }
 
     /**
@@ -57,10 +59,14 @@ public class MetaSaveService {
         long tenantId = TenantContext.requireTenantId();
         Long userId = TenantContext.userId();
         // 规则引擎：保存前校验。违规（Severity=2）直接抛 ApiException，警告级只记日志。
-        ruleService.checkBeforeSave(objectCode, parseData(json));
+        var data = parseData(json);
+        ruleService.checkBeforeSave(objectCode, data);
         assertNotStale(objectCode, json);
         try {
-            long id = jdbc.execute((ConnectionCallback<Long>) con -> callSave(con, tenantId, userId, objectCode, json));
+            long id = jdbc.execute((ConnectionCallback<Long>) con ->
+                    saveProc.call(con, tenantId, userId, objectCode, json));
+            // 主子表：同一事务内保存明细（未提交的子行软删除）
+            childService.saveChildren(objectCode, id, data, tenantId, userId);
             log.info("meta_save tenant={} object={} id={}", tenantId, objectCode, id);
             return id;
         } catch (org.springframework.dao.DataAccessException ex) {
@@ -143,23 +149,6 @@ public class MetaSaveService {
     /** 标识符加方括号：表名/主键来自元数据（已登记），仍做转义防御。 */
     private static String quote(String identifier) {
         return "[" + identifier.replace("]", "]]") + "]";
-    }
-
-    private long callSave(Connection con, long tenantId, Long userId, String objectCode, String json)
-            throws SQLException {
-        try (CallableStatement cs = con.prepareCall("{call plat.usp_Meta_Save (?, ?, ?, ?, ?)}")) {
-            cs.setInt(1, (int) tenantId);
-            if (userId == null) {
-                cs.setNull(2, Types.BIGINT);
-            } else {
-                cs.setLong(2, userId);
-            }
-            cs.setString(3, objectCode);
-            cs.setString(4, json);
-            cs.registerOutParameter(5, Types.BIGINT);
-            cs.execute();
-            return cs.getLong(5);
-        }
     }
 
     private ApiException translate(String objectCode, Exception ex) {
