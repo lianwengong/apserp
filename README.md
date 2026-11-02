@@ -70,7 +70,24 @@ apserp/
   web/                    前端（Vue 3 + TS strict + Vite）
 ```
 
+## 已实现的引擎能力
+
+引擎不是「脚手架」，下面这些能力已经能用配置驱动，且都有集成测试兜底（`mvn test -Dit.db=true`，129 个用例）：
+
+| 能力 | 入口 | 说明 |
+|---|---|---|
+| 列表/表单/字段权限 | `GET /api/meta/{objectCode}` | 视图列、表单布局、字段级 可写/只读/不可见 全部来自元数据 |
+| 保存引擎 | `POST /api/meta/{objectCode}` | 一次事务内保存主表 + 明细；租户字段、外键由服务端强制写入 |
+| 主子表 | `plat.DataObjectRelation` | 别名即 JSON 键（如 `Contacts`）；未提交的子行软删除；行数上限保护 |
+| 规则引擎 | `/api/design/rules`、`/api/runtime/...` | 自研表达式（无 SpEL/JS），保存前校验，错误阻断/警告放行，带测试台 |
+| 动作/按钮 | `POST /api/runtime/action/execute` | 内置/导航/命令/脚本四类动作，服务端命令注册表：`export.csv` `copy.record` `audit.log` `workflow.submit` |
+| 审批流 | `/api/runtime/workflow/**` | 条件分支、或签/会签/顺签、退回、加签、撤回、抄送、节点超时催办、审批代理 |
+| 发布与回滚 | `/api/design/versions/**` | 全量快照 + diff + 整体回滚 + **灰度发布**（指定用户先吃新版本）|
+| 元数据缓存 | `MetaCache` | 60 秒 TTL + 发布/回滚/激活显式失效，key 带租户 |
+| 设计器中心 | `/#/design` | 字段 / 子表 / 规则 / 按钮 / 审批 / 权限 / 发布 七个页签 |
+
 ## 已知限制（第一周内解决）
 
 - Flyway 脚本含 `GO` 批次分隔，需 Flyway ≥ 9.16（SQL Server 支持 GO）；若用旧版，执行 `tools/strip_go.py` 预转换。
 - `V20__dev_seed_meta.sql` 是开发/演示数据，生产环境由初始化向导生成，不随迁移发布。
+- 灰度名单目前只做「谁先吃到新版」的标记与展示，运行时读元数据仍按租户统一读取（要按用户分版本读，需要把快照做成可查询的物化结构，属于下一阶段）。

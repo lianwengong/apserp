@@ -91,6 +91,13 @@ src/test/java/com/apserp/
 | 2026-11-01 | 前端按 Java 字段类型猜 JSON：`FormFieldDto.controlType` 实际是 **String**（`"6"`），`ListViewColumn.align` 也是字符串 | 前端 `src/api/types.ts` 以真实 JSON 为准；复杂控件比较前先 `Number(...)`，不要照着 record 的 `int` 猜 |
 | 2026-11-01 | Windows 下 esbuild 压缩大 chunk 报 `remove C:\...\Temp\esbuild-...: Access is denied`，`vite build` 直接中断（沙箱/杀软占用临时文件） | 前端构建改用 `terser` + `target: esnext`（见 `web/vite.config.ts`）；不要改回 esbuild minify，除非换 Linux 构建机 |
 | 2026-11-01 | Flyway 迁移脚本里的 `sp_set_session_context 'BypassRls', 1` 在连接归还 Hikari 后没有清除；复用该连接的请求会绕过 RLS，读到所有租户的元数据（列表排序时报「列名 'Sort' 不明确」） | **待修**：`TenantAwareDataSource` 每次借出连接时显式把 `BypassRls` 置 0/NULL；或让 Flyway 使用独立连接池 |
+| 2026-11-02 | 用脚本 `-replace` 改含中文的 Java 源文件，注释行末尾被弄坏，**下一行代码被吞进注释**（`List<Long> delegated` 变成注释内容）：编译通过，但审批代理静默失效 | 改 Java 源码只用编辑器级精确替换；改完必须 `grep` 关键代码行，确认没被注释掉。这类缺陷只有集成测试能抓到 |
+| 2026-11-02 | `DATEADD(hour, ?, ...)` 的参数传 `NULL`：SQL Server 推断不出类型，报 8116（nvarchar 与 dateadd 参数 2 冲突） | 时间在 Java 侧算好传 `Timestamp`；不要让同一个参数既做判空又做函数入参 |
+| 2026-11-02 | 库里时间列都是 `sysutcdatetime()`（UTC），而 `LocalDateTime.now()` 是本地时间（+08） | 凡是「比较时间」的功能（代理有效期、任务到期）必须统一到 UTC：写入前 `toUtc()`、读出 `fromUtc()`。否则 +08 时区下代理永不生效、超时永不触发 |
+| 2026-11-02 | 主子表「软删除」写库成功，但明细里仍能看到已删行 | 列表引擎只有当**字段元数据登记了 `IsDeleted`** 时才追加 `AND IsDeleted = 0`；任何要软删的表必须把该字段登记为隐藏字段（`IsVisible=0`） |
+| 2026-11-02 | 明细表格里没填的数字列以 `null` 提交，顶掉列默认值 → 「不能将值 NULL 插入列 Sort」 | 服务端保存子行前剔除「非空字段上的 null」（视为没填，交给默认值）；只有可空字段才允许显式 null |
+| 2026-11-02 | `sys.security_predicates` 没有 `security_policy_id` 列，按它 JOIN 判断「表是否已在 TenantPolicy 里」会报列名无效 | 用 `WHERE target_object_id = OBJECT_ID('schema.Table')` 判断即可 |
+
 
 ## 7. 术语表
 
