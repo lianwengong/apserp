@@ -233,6 +233,8 @@ export interface ApprovalNodeDto {
   nextNodeCode: string | null
   rejectNodeCode: string | null
   approvers: ApproverDto[]
+  timeoutHours: number | null
+  ccUserIds: number[]
 }
 
 export interface ApprovalDefDto {
@@ -267,6 +269,8 @@ export interface ApprovalSaveBody {
     allowAddSign: boolean
     nextNodeCode?: string | null
     rejectNodeCode?: string | null
+    timeoutHours?: number | null
+    ccUserIds?: number[]
     approvers: { approverType: number; approverId?: number | null; expression?: string | null; sort: number }[]
   }[]
 }

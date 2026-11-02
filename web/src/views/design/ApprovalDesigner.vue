@@ -120,6 +120,41 @@
             <el-form-item label="节点条件" label-width="66px">
               <el-input v-model="node.conditionExpr" size="small" placeholder="留空=总是进入；否则按单据数据求值" />
             </el-form-item>
+            <el-row :gutter="8">
+              <el-col :span="7">
+                <el-form-item label="超时(小时)" label-width="76px">
+                  <el-input-number
+                    v-model="node.timeoutHours"
+                    size="small"
+                    :min="0"
+                    :step="4"
+                    :controls="false"
+                    placeholder="不限"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+              </el-col>
+              <el-col :span="17">
+                <el-form-item label="抄送人" label-width="60px">
+                  <el-select
+                    v-model="node.ccUserIds"
+                    size="small"
+                    multiple
+                    collapse-tags
+                    filterable
+                    placeholder="只读通知，不进待办"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="u in users"
+                      :key="u.id"
+                      :value="u.id"
+                      :label="u.displayName || u.userName"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
             <div class="approvers">
               <span class="approvers-label">审批人</span>
               <el-tag
@@ -191,6 +226,8 @@ interface NodeForm {
   nextNodeCode: string | null
   rejectNodeCode: string | null
   approvers: ApproverForm[]
+  timeoutHours: number | null
+  ccUserIds: number[]
 }
 
 const defs = ref<ApprovalDefDto[]>([])
@@ -269,7 +306,9 @@ function editDef(d: ApprovalDefDto) {
         approverId: a.approverId,
         expression: a.expression,
         sort: a.sort
-      }))
+      })),
+      timeoutHours: n.timeoutHours ?? null,
+      ccUserIds: n.ccUserIds ?? []
     }))
   })
 }
@@ -288,7 +327,9 @@ function addNode() {
     allowAddSign: true,
     nextNodeCode: null,
     rejectNodeCode: null,
-    approvers: []
+    approvers: [],
+    timeoutHours: null,
+    ccUserIds: []
   })
 }
 
@@ -351,7 +392,9 @@ function payload() {
       allowAddSign: n.allowAddSign,
       nextNodeCode: n.nextNodeCode,
       rejectNodeCode: n.rejectNodeCode,
-      approvers: n.approvers.map((a, i) => ({ ...a, sort: (i + 1) * 10 }))
+      approvers: n.approvers.map((a, i) => ({ ...a, sort: (i + 1) * 10 })),
+      timeoutHours: n.timeoutHours,
+      ccUserIds: n.ccUserIds
     }))
   }
 }

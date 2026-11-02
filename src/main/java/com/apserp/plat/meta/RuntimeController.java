@@ -7,6 +7,7 @@ import com.apserp.common.security.RequiresPermission;
 import com.apserp.plat.perm.PermissionService;
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +53,62 @@ public class RuntimeController {
         this.childService = childService;
         this.actionExecutor = actionExecutor;
         this.permissionService = permissionService;
+    }
+
+    // ---------------------------------------------------------------- 抄送 / 超时 / 代理
+
+    /** 抄送给我的流程（未读在前）。 */
+    @GetMapping("/workflow/ccs")
+    public ApiResult<List<ApprovalService.InstanceDto>> ccs() {
+        return ApiResult.ok(approvalService.myCcs());
+    }
+
+    @GetMapping("/workflow/ccs/unread")
+    public ApiResult<Map<String, Integer>> unreadCc() {
+        return ApiResult.ok(Map.of("count", approvalService.unreadCcCount()));
+    }
+
+    @PostMapping("/workflow/instances/{id}/cc-read")
+    public ApiResult<Void> markCcRead(@PathVariable long id) {
+        approvalService.markCcRead(id);
+        return ApiResult.ok(null);
+    }
+
+    /** 超时未处理的流程（管理员/审批人视角）。 */
+    @GetMapping("/workflow/overdue")
+    public ApiResult<List<ApprovalService.InstanceDto>> overdue() {
+        return ApiResult.ok(approvalService.overdueTasks());
+    }
+
+    @PostMapping("/workflow/tasks/{id}/remind")
+    public ApiResult<Map<String, Integer>> remind(@PathVariable long id,
+                                                  @RequestBody(required = false) Map<String, String> body) {
+        String opinion = body == null ? null : body.get("opinion");
+        return ApiResult.ok(Map.of("reminded", approvalService.remind(id, opinion)));
+    }
+
+    @GetMapping("/workflow/delegates")
+    public ApiResult<List<ApprovalService.DelegateDto>> delegates() {
+        return ApiResult.ok(approvalService.listDelegates());
+    }
+
+    @PostMapping("/workflow/delegates")
+    public ApiResult<Map<String, Long>> saveDelegate(@RequestBody DelegateBody body) {
+        long id = approvalService.saveDelegate(new ApprovalService.DelegateSaveRequest(
+                body.id(), body.userId(), body.delegateToId(), body.startAt(), body.endAt(),
+                body.enabled(), body.remark()));
+        return ApiResult.ok(Map.of("id", id));
+    }
+
+    public record DelegateBody(Long id, long userId, long delegateToId,
+                               java.time.LocalDateTime startAt, java.time.LocalDateTime endAt,
+                               boolean enabled, String remark) {
+    }
+
+    @DeleteMapping("/workflow/delegates/{id}")
+    public ApiResult<Void> deleteDelegate(@PathVariable long id) {
+        approvalService.deleteDelegate(id);
+        return ApiResult.ok(null);
     }
 
     // ---------------------------------------------------------------- 动作执行

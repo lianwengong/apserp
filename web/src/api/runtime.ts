@@ -45,6 +45,29 @@ export const runtimeApi = {
 
   todos: () => request<ApprovalInstance[]>('/api/runtime/workflow/todos'),
 
+  ccs: () => request<ApprovalInstance[]>('/api/runtime/workflow/ccs'),
+
+  unreadCc: () => request<{ count: number }>('/api/runtime/workflow/ccs/unread'),
+
+  markCcRead: (instanceId: number) =>
+    request<void>(`/api/runtime/workflow/instances/${instanceId}/cc-read`, { method: 'POST' }),
+
+  overdue: () => request<ApprovalInstance[]>('/api/runtime/workflow/overdue'),
+
+  remind: (taskId: number, opinion: string) =>
+    request<{ reminded: number }>(`/api/runtime/workflow/tasks/${taskId}/remind`, {
+      method: 'POST',
+      body: { opinion }
+    }),
+
+  delegates: () => request<DelegateDto[]>('/api/runtime/workflow/delegates'),
+
+  saveDelegate: (body: DelegateSaveBody) =>
+    request<{ id: number }>('/api/runtime/workflow/delegates', { method: 'POST', body }),
+
+  deleteDelegate: (id: number) =>
+    request<void>(`/api/runtime/workflow/delegates/${id}`, { method: 'DELETE' }),
+
   instances: (objectCode: string, businessId: number) =>
     request<ApprovalInstance[]>(
       `/api/runtime/workflow/instances${queryString({ objectCode, businessId })}`
@@ -100,6 +123,28 @@ export interface ResolvedButton {
   actions: ResolvedAction[]
 }
 
+export interface DelegateDto {
+  id: number
+  userId: number
+  userName: string | null
+  delegateToId: number
+  delegateToName: string | null
+  startAt: string | null
+  endAt: string | null
+  enabled: boolean
+  remark: string | null
+}
+
+export interface DelegateSaveBody {
+  id?: number | null
+  userId: number
+  delegateToId: number
+  startAt?: string | null
+  endAt?: string | null
+  enabled: boolean
+  remark?: string | null
+}
+
 export interface ApprovalTask {
   id: number
   instanceId: number
@@ -112,6 +157,8 @@ export interface ApprovalTask {
   opinion: string | null
   handledAt: string | null
   sort: number
+  dueAt: string | null
+  overdue: boolean
 }
 
 export interface ApprovalLog {
@@ -144,4 +191,5 @@ export interface ApprovalInstance {
   canApprove: boolean
   canWithdraw: boolean
   canAddSign: boolean
+  ccUsers: string[]
 }

@@ -5,6 +5,7 @@ import LoginView from '../views/LoginView.vue'
 import MetaListView from '../views/MetaListView.vue'
 import DesignerView from '../views/design/DesignerView.vue'
 import TodoView from '../views/TodoView.vue'
+import WorkflowCenter from '../views/WorkflowCenter.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { session } from '../stores/session'
@@ -40,6 +41,7 @@ const router = createRouter({
         },
         { path: 'design', name: 'design', component: DesignerView, meta: { title: '设计器中心' } },
         { path: 'todo', name: 'todo', component: TodoView, meta: { title: '我的待办' } },
+        { path: 'workflow', name: 'workflow', component: WorkflowCenter, meta: { title: '流程中心' } },
         { path: '403', name: 'forbidden', component: ForbiddenView, meta: { title: '无访问权限' } },
         {
           path: ':pathMatch(.*)*',

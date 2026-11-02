@@ -39,6 +39,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ApprovalService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ApprovalService.class);
+
     // 实例状态
     public static final int INST_RUNNING = 0;
     public static final int INST_APPROVED = 1;
@@ -84,7 +87,8 @@ public class ApprovalService {
 
     public record NodeDto(long id, String code, String name, int nodeType, int sort, int approveMode,
                           int rejectMode, String conditionExpr, boolean allowAddSign,
-                          String nextNodeCode, String rejectNodeCode, List<ApproverDto> approvers) {
+                          String nextNodeCode, String rejectNodeCode, List<ApproverDto> approvers,
+                          Integer timeoutHours, List<Long> ccUserIds) {
     }
 
     public record DefDto(long id, String code, String name, String objectCode, int version,
@@ -94,7 +98,7 @@ public class ApprovalService {
 
     public record TaskDto(long id, long instanceId, String nodeCode, String nodeName, long approverId,
                           String approverName, int status, String statusName, String opinion,
-                          LocalDateTime handledAt, int sort) {
+                          LocalDateTime handledAt, int sort, LocalDateTime dueAt, boolean overdue) {
     }
 
     public record LogDto(String action, String actionName, Long operatorId, String operatorName,
@@ -106,7 +110,8 @@ public class ApprovalService {
                               String currentNodeCode, String currentNodeName, Long startedBy,
                               String startedByName, LocalDateTime startedAt, LocalDateTime finishedAt,
                               List<TaskDto> tasks, List<LogDto> logs,
-                              boolean canApprove, boolean canWithdraw, boolean canAddSign) {
+                              boolean canApprove, boolean canWithdraw, boolean canAddSign,
+                              List<String> ccUsers) {
     }
 
     public record DefSaveRequest(Long id, String code, String name, String objectCode, String conditionExpr,
@@ -116,7 +121,17 @@ public class ApprovalService {
     public record NodeSaveRequest(String code, String name, int nodeType, int sort, int approveMode,
                                   int rejectMode, String conditionExpr, boolean allowAddSign,
                                   String nextNodeCode, String rejectNodeCode,
-                                  List<ApproverSaveRequest> approvers) {
+                                  List<ApproverSaveRequest> approvers,
+                                  Integer timeoutHours, List<Long> ccUserIds) {
+
+        /** 兼容旧调用：不带超时与抄送。 */
+        public NodeSaveRequest(String code, String name, int nodeType, int sort, int approveMode,
+                               int rejectMode, String conditionExpr, boolean allowAddSign,
+                               String nextNodeCode, String rejectNodeCode,
+                               List<ApproverSaveRequest> approvers) {
+            this(code, name, nodeType, sort, approveMode, rejectMode, conditionExpr, allowAddSign,
+                    nextNodeCode, rejectNodeCode, approvers, null, List.of());
+        }
     }
 
     public record ApproverSaveRequest(int approverType, Long approverId, String expression, int sort) {
@@ -158,7 +173,7 @@ public class ApprovalService {
     private List<NodeDto> nodesOf(long defId) {
         List<NodeDto> nodes = jdbc.query("""
                         SELECT Id, Code, Name, NodeType, Sort, ApproveMode, RejectMode, ConditionExpr,
-                               AllowAddSign, NextNodeCode, RejectNodeCode
+                               AllowAddSign, NextNodeCode, RejectNodeCode, TimeoutHours
                         FROM plat.WorkflowNode
                         WHERE WorkflowDefId = ?
                         ORDER BY Sort, Id
@@ -167,11 +182,19 @@ public class ApprovalService {
                         rs.getInt("NodeType"), rs.getInt("Sort"), rs.getInt("ApproveMode"),
                         rs.getInt("RejectMode"), rs.getString("ConditionExpr"),
                         rs.getBoolean("AllowAddSign"), rs.getString("NextNodeCode"),
-                        rs.getString("RejectNodeCode"), List.of()),
+                        rs.getString("RejectNodeCode"), List.of(),
+                        (Integer) rs.getObject("TimeoutHours"), List.of()),
                 defId);
         return nodes.stream().map(n -> new NodeDto(n.id(), n.code(), n.name(), n.nodeType(), n.sort(),
                 n.approveMode(), n.rejectMode(), n.conditionExpr(), n.allowAddSign(),
-                n.nextNodeCode(), n.rejectNodeCode(), approversOf(n.id()))).toList();
+                n.nextNodeCode(), n.rejectNodeCode(), approversOf(n.id()),
+                n.timeoutHours(), ccUsersOf(n.id()))).toList();
+    }
+
+    private List<Long> ccUsersOf(long nodeId) {
+        return jdbc.queryForList("""
+                SELECT UserId FROM plat.WorkflowNodeCc WHERE WorkflowNodeId = ? ORDER BY Sort, Id
+                """, Long.class, nodeId);
     }
 
     private List<ApproverDto> approversOf(long nodeId) {
@@ -237,6 +260,8 @@ public class ApprovalService {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "只有草稿状态的审批流可以修改");
             }
             defId = id;
+            jdbc.update("DELETE FROM plat.WorkflowNodeCc WHERE WorkflowNodeId IN "
+                    + "(SELECT Id FROM plat.WorkflowNode WHERE WorkflowDefId = ?)", defId);
             jdbc.update("DELETE FROM plat.WorkflowNodeApprover WHERE WorkflowNodeId IN "
                     + "(SELECT Id FROM plat.WorkflowNode WHERE WorkflowDefId = ?)", defId);
             jdbc.update("DELETE FROM plat.WorkflowNode WHERE WorkflowDefId = ?", defId);
@@ -245,12 +270,13 @@ public class ApprovalService {
             jdbc.update("""
                     INSERT plat.WorkflowNode (WorkflowDefId, Code, Name, NodeType, Sort, ApproveMode,
                                               RejectMode, ConditionExpr, AllowAddSign, AllowDelegate,
-                                              NextNodeCode, RejectNodeCode)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                              NextNodeCode, RejectNodeCode, TimeoutHours)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
                     """, defId, n.code(), n.name(), n.nodeType() <= 0 ? NODE_APPROVAL : n.nodeType(),
                     n.sort(), n.approveMode() <= 0 ? MODE_ANY : n.approveMode(),
                     n.rejectMode() <= 0 ? 1 : n.rejectMode(), n.conditionExpr(),
-                    n.allowAddSign() ? 1 : 0, n.nextNodeCode(), n.rejectNodeCode());
+                    n.allowAddSign() ? 1 : 0, n.nextNodeCode(), n.rejectNodeCode(),
+                    n.timeoutHours() == null || n.timeoutHours() <= 0 ? null : n.timeoutHours());
             Long nodeId = jdbc.queryForObject("""
                     SELECT Id FROM plat.WorkflowNode WHERE WorkflowDefId = ? AND Code = ?
                     """, Long.class, defId, n.code());
@@ -264,6 +290,18 @@ public class ApprovalService {
                             VALUES (?, ?, ?, ?, ?)
                             """, nodeId, a.approverType() <= 0 ? APPROVER_USER : a.approverType(),
                             a.approverId(), a.expression(), a.sort() <= 0 ? sort : a.sort());
+                }
+            }
+            if (n.ccUserIds() != null) {
+                int ccSort = 0;
+                for (Long ccUser : n.ccUserIds()) {
+                    if (ccUser == null) {
+                        continue;
+                    }
+                    ccSort += 10;
+                    jdbc.update("""
+                            INSERT plat.WorkflowNodeCc (WorkflowNodeId, UserId, Sort) VALUES (?, ?, ?)
+                            """, nodeId, ccUser, ccSort);
                 }
             }
         }
@@ -669,13 +707,26 @@ public class ApprovalService {
                 inst.businessNo, inst.title, inst.status,
                 INST_STATUS_NAME.getOrDefault(inst.status, "未知"), inst.currentNodeCode,
                 currentNodeName, inst.startedBy, startedByName, inst.startedAt, inst.finishedAt,
-                tasks, logs, canApprove, canWithdraw, canAddSign);
+                tasks, logs, canApprove, canWithdraw, canAddSign, ccNamesOf(inst.id));
+    }
+
+    /** 该实例的抄送人显示名。 */
+    private List<String> ccNamesOf(long instanceId) {
+        return jdbc.queryForList("""
+                SELECT ISNULL(u.DisplayName, u.UserName)
+                FROM plat.WorkflowInstanceCc c
+                LEFT JOIN plat.[User] u ON u.Id = c.UserId
+                WHERE c.InstanceId = ?
+                ORDER BY c.Id
+                """, String.class, instanceId);
     }
 
     private List<TaskDto> tasksOf(long instanceId) {
         return jdbc.query("""
                         SELECT t.Id, t.InstanceId, n.Code AS NodeCode, t.NodeName, t.ApproverId,
-                               u.DisplayName AS ApproverName, t.ApproveStatus, t.Opinion, t.HandledAt, t.Sort
+                               u.DisplayName AS ApproverName, t.ApproveStatus, t.Opinion, t.HandledAt, t.Sort,
+                               t.DueAt, CASE WHEN t.ApproveStatus = 0 AND t.DueAt IS NOT NULL
+                                             AND t.DueAt < sysutcdatetime() THEN 1 ELSE 0 END AS Overdue
                         FROM plat.WorkflowTask t
                         JOIN plat.WorkflowNode n ON n.Id = t.NodeId
                         LEFT JOIN plat.[User] u ON u.Id = t.ApproverId
@@ -686,7 +737,8 @@ public class ApprovalService {
                         rs.getString("NodeCode"), rs.getString("NodeName"), rs.getLong("ApproverId"),
                         rs.getString("ApproverName"), rs.getInt("ApproveStatus"),
                         TASK_STATUS_NAME.getOrDefault(rs.getInt("ApproveStatus"), "未知"),
-                        rs.getString("Opinion"), toLocal(rs.getTimestamp("HandledAt")), rs.getInt("Sort")),
+                        rs.getString("Opinion"), toLocal(rs.getTimestamp("HandledAt")), rs.getInt("Sort"),
+                        toLocal(rs.getTimestamp("DueAt")), rs.getInt("Overdue") == 1),
                 instanceId);
     }
 
@@ -724,7 +776,7 @@ public class ApprovalService {
     private List<NodeRow> loadNodes(long defId) {
         return jdbc.query("""
                         SELECT Id, WorkflowDefId, Code, Name, NodeType, Sort, ApproveMode, RejectMode,
-                               ConditionExpr, AllowAddSign, NextNodeCode, RejectNodeCode
+                               ConditionExpr, AllowAddSign, NextNodeCode, RejectNodeCode, TimeoutHours
                         FROM plat.WorkflowNode WHERE WorkflowDefId = ? ORDER BY Sort, Id
                         """,
                 (rs, i) -> new NodeRow(rs.getLong("Id"), rs.getLong("WorkflowDefId"),
@@ -799,14 +851,41 @@ public class ApprovalService {
             throw new ApiException(ErrorCode.BAD_REQUEST,
                     "审批节点 [" + node.code + "] 未能解析出审批人");
         }
+        Integer timeout = jdbc.query("""
+                SELECT TimeoutHours FROM plat.WorkflowNode WHERE Id = ?
+                """, rs -> rs.next() ? (Integer) rs.getObject(1) : null, node.id);
+        // 到期时间在 Java 侧算好再传：SQL 里对 NULL 参数做 DATEADD 会因类型推断失败报 8116
+        java.sql.Timestamp dueAt = timeout == null || timeout <= 0 ? null
+                : java.sql.Timestamp.valueOf(LocalDateTime.now().plusHours(timeout));
         int sort = 0;
         for (Long uid : approvers) {
             sort += 10;
             jdbc.update("""
-                    INSERT plat.WorkflowTask (InstanceId, NodeId, NodeName, ApproverId, ApproveStatus, Sort)
-                    VALUES (?, ?, ?, ?, 0, ?)
-                    """, instanceId, node.id, node.name, uid, sort);
+                    INSERT plat.WorkflowTask (InstanceId, NodeId, NodeName, ApproverId, ApproveStatus, Sort, DueAt)
+                    VALUES (?, ?, ?, ?, 0, ?, ?)
+                    """, instanceId, node.id, node.name, uid, sort, dueAt);
         }
+        // 抄送：进节点时快照一次，已存在则忽略（退回重进不重复抄送）
+        jdbc.update("""
+                INSERT plat.WorkflowInstanceCc (TenantId, InstanceId, NodeCode, UserId, IsRead)
+                SELECT i.TenantId, i.Id, ?, c.UserId, 0
+                FROM plat.WorkflowInstance i
+                JOIN plat.WorkflowNodeCc c ON c.WorkflowNodeId = ?
+                WHERE i.Id = ?
+                  AND NOT EXISTS (SELECT 1 FROM plat.WorkflowInstanceCc x
+                                  WHERE x.InstanceId = i.Id AND x.UserId = c.UserId)
+                """, node.code, node.id, instanceId);
+    }
+
+    /** 当前有效的审批代理：UserId → 代理人。 */
+    private Long delegateOf(long userId) {
+        List<Long> rows = jdbc.query("""
+                SELECT DelegateToId FROM plat.WorkflowDelegate
+                WHERE TenantId = ? AND UserId = ? AND IsDeleted = 0 AND IsEnabled = 1
+                  AND (StartAt IS NULL OR StartAt <= sysutcdatetime())
+                  AND (EndAt IS NULL OR EndAt >= sysutcdatetime())
+                """, (rs, i) -> rs.getLong(1), TenantContext.requireTenantId(), userId);
+        return rows.isEmpty() ? null : rows.get(0);
     }
 
     private List<Long> resolveApprovers(NodeRow node, Long initiator) {
@@ -864,7 +943,17 @@ public class ApprovalService {
                 }
             }
         }
-        return out;
+        // 代理：解析出的审批人如果当前有生效代理，换成代理人（会签/顺签同样适用）
+        List<Long> delegated = new ArrayList<>(out.size());
+        for (Long uid : out) {
+            Long to = delegateOf(uid);
+            Long effective = to == null ? uid : to;
+            if (!delegated.contains(effective)) {
+                delegated.add(effective);
+            }
+        }
+        log.info("wf_resolve_approvers node={} out={} delegated={}", node.code, out, delegated);
+        return delegated;
     }
 
     private void closeInstance(long instanceId, int status) {
@@ -968,6 +1057,197 @@ public class ApprovalService {
     }
 
     /** 设计器用：给审批人选择器提供用户列表。 */
+    // ============================================================ 抄送 / 超时 / 代理
+
+    /** 抄送给我的流程（未读在前）。 */
+    public List<InstanceDto> myCcs() {
+        long tenantId = TenantContext.requireTenantId();
+        Long userId = TenantContext.userId();
+        if (userId == null) {
+            return List.of();
+        }
+        List<Long> ids = jdbc.queryForList("""
+                SELECT c.InstanceId FROM plat.WorkflowInstanceCc c
+                JOIN plat.WorkflowInstance i ON i.Id = c.InstanceId
+                WHERE c.TenantId = ? AND c.UserId = ?
+                ORDER BY c.IsRead, i.Id DESC
+                """, Long.class, tenantId, userId);
+        return ids.stream().map(this::instanceOf).filter(java.util.Objects::nonNull).toList();
+    }
+
+    public int unreadCcCount() {
+        long tenantId = TenantContext.requireTenantId();
+        Long userId = TenantContext.userId();
+        if (userId == null) {
+            return 0;
+        }
+        Integer n = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.WorkflowInstanceCc
+                WHERE TenantId = ? AND UserId = ? AND IsRead = 0
+                """, Integer.class, tenantId, userId);
+        return n == null ? 0 : n;
+    }
+
+    /** 标记抄送已读：只能改自己的抄送记录。 */
+    @Transactional
+    public void markCcRead(long instanceId) {
+        long tenantId = TenantContext.requireTenantId();
+        Long userId = TenantContext.userId();
+        if (userId == null) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "未登录");
+        }
+        jdbc.update("""
+                UPDATE plat.WorkflowInstanceCc SET IsRead = 1, ReadAt = sysutcdatetime()
+                WHERE TenantId = ? AND InstanceId = ? AND UserId = ? AND IsRead = 0
+                """, tenantId, instanceId, userId);
+    }
+
+    /** 超时未处理的待办（DueAt 已过），按到期时间升序。 */
+    public List<InstanceDto> overdueTasks() {
+        long tenantId = TenantContext.requireTenantId();
+        List<Long> ids = jdbc.queryForList("""
+                SELECT DISTINCT i.Id
+                FROM plat.WorkflowTask t
+                JOIN plat.WorkflowInstance i ON i.Id = t.InstanceId
+                WHERE i.TenantId = ? AND i.Status = 0 AND t.ApproveStatus = 0
+                  AND t.DueAt IS NOT NULL AND t.DueAt < sysutcdatetime()
+                ORDER BY i.Id DESC
+                """, Long.class, tenantId);
+        return ids.stream().map(this::instanceOf).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
+     * 催办：给待办审批人写一条提醒日志。
+     *
+     * <p>没有独立的通知中心时，日志就是可追溯的提醒记录；后续接通知服务时在这里发消息即可。</p>
+     */
+    @Transactional
+    public int remind(long taskId, String opinion) {
+        long tenantId = TenantContext.requireTenantId();
+        TaskRow task = loadTask(taskId);
+        if (task == null) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "待办不存在：" + taskId);
+        }
+        InstanceRow inst = loadInstance(tenantId, task.instanceId);
+        if (inst == null) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "审批实例不存在");
+        }
+        if (task.status != TASK_PENDING) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "该待办已处理，无需催办");
+        }
+        jdbc.update("""
+                INSERT plat.WorkflowActionLog (InstanceId, Action, OperatorId, Opinion)
+                VALUES (?, 'REMIND', ?, ?)
+                """, task.instanceId, TenantContext.userId(),
+                opinion == null || opinion.isBlank() ? "催办" : opinion);
+        log.info("wf_remind instance={} task={} approver={} tenant={}",
+                task.instanceId, taskId, task.approverId, tenantId);
+        return 1;
+    }
+
+    public record DelegateDto(long id, long userId, String userName, long delegateToId,
+                              String delegateToName, LocalDateTime startAt, LocalDateTime endAt,
+                              boolean enabled, String remark) {
+    }
+
+    public List<DelegateDto> listDelegates() {
+        long tenantId = TenantContext.requireTenantId();
+        return jdbc.query("""
+                        SELECT d.Id, d.UserId, u1.DisplayName AS UserName, d.DelegateToId,
+                               u2.DisplayName AS DelegateToName, d.StartAt, d.EndAt, d.IsEnabled, d.Remark
+                        FROM plat.WorkflowDelegate d
+                        LEFT JOIN plat.[User] u1 ON u1.Id = d.UserId
+                        LEFT JOIN plat.[User] u2 ON u2.Id = d.DelegateToId
+                        WHERE d.TenantId = ? AND d.IsDeleted = 0
+                        ORDER BY d.Id DESC
+                        """,
+                (rs, i) -> new DelegateDto(rs.getLong("Id"), rs.getLong("UserId"),
+                        rs.getString("UserName"), rs.getLong("DelegateToId"),
+                        rs.getString("DelegateToName"), toLocal(rs.getTimestamp("StartAt")),
+                        toLocal(rs.getTimestamp("EndAt")), rs.getBoolean("IsEnabled"),
+                        rs.getString("Remark")),
+                tenantId);
+    }
+
+    public record DelegateSaveRequest(Long id, long userId, long delegateToId,
+                                      LocalDateTime startAt, LocalDateTime endAt,
+                                      boolean enabled, String remark) {
+    }
+
+    @Transactional
+    public long saveDelegate(DelegateSaveRequest req) {
+        long tenantId = TenantContext.requireTenantId();
+        if (req.userId() <= 0 || req.delegateToId() <= 0) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "委托人与代理人都必须指定");
+        }
+        if (req.userId() == req.delegateToId()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "不能代理给自己");
+        }
+        if (requestedDelegateCycle(req.userId(), req.delegateToId())) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "代理关系不能成环（A→B 且 B→A）");
+        }
+        Integer dup = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.WorkflowDelegate
+                WHERE TenantId = ? AND IsDeleted = 0 AND UserId = ? AND Id <> ISNULL(?, -1)
+                """, Integer.class, tenantId, req.userId(), req.id());
+        if (dup != null && dup > 0) {
+            throw new ApiException(ErrorCode.DUPLICATE_KEY, "该用户已有代理设置，请直接修改");
+        }
+        if (req.id() != null) {
+            jdbc.update("""
+                    UPDATE plat.WorkflowDelegate
+                    SET UserId = ?, DelegateToId = ?, StartAt = ?, EndAt = ?, IsEnabled = ?, Remark = ?,
+                        ModifiedAt = sysutcdatetime()
+                    WHERE Id = ? AND TenantId = ?
+                    """, req.userId(), req.delegateToId(), toUtc(req.startAt()), toUtc(req.endAt()),
+                    req.enabled() ? 1 : 0, req.remark(), req.id(), tenantId);
+            return req.id();
+        }
+        jdbc.update("""
+                INSERT plat.WorkflowDelegate (TenantId, UserId, DelegateToId, StartAt, EndAt,
+                                              IsEnabled, Remark, CreatedAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, sysutcdatetime())
+                """, tenantId, req.userId(), req.delegateToId(), toUtc(req.startAt()), toUtc(req.endAt()),
+                req.enabled() ? 1 : 0, req.remark());
+        return jdbc.queryForObject(
+                "SELECT MAX(Id) FROM plat.WorkflowDelegate WHERE TenantId = ? AND UserId = ?",
+                Long.class, tenantId, req.userId());
+    }
+
+    /** 前端传的是本地墙上时间，库里存 UTC（其它时间列都是 sysutcdatetime）。 */
+    private static LocalDateTime toUtc(LocalDateTime local) {
+        return local == null ? null
+                : local.atZone(java.time.ZoneId.systemDefault()).withZoneSameInstant(java.time.ZoneOffset.UTC)
+                        .toLocalDateTime();
+    }
+
+    /** UTC 存储 → 前端本地时间。 */
+    private static LocalDateTime fromUtc(LocalDateTime utc) {
+        return utc == null ? null
+                : utc.atZone(java.time.ZoneOffset.UTC).withZoneSameInstant(java.time.ZoneId.systemDefault())
+                        .toLocalDateTime();
+    }
+
+    private boolean requestedDelegateCycle(long userId, long delegateToId) {
+        List<Long> back = jdbc.queryForList("""
+                SELECT DelegateToId FROM plat.WorkflowDelegate
+                WHERE TenantId = ? AND IsDeleted = 0 AND IsEnabled = 1 AND UserId = ?
+                """, Long.class, TenantContext.requireTenantId(), delegateToId);
+        return back.contains(userId);
+    }
+
+    @Transactional
+    public void deleteDelegate(long id) {
+        long tenantId = TenantContext.requireTenantId();
+        int n = jdbc.update("""
+                UPDATE plat.WorkflowDelegate SET IsDeleted = 1
+                WHERE Id = ? AND TenantId = ?
+                """, id, tenantId);
+        if (n == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "代理设置不存在");
+        }
+    }
+
     public List<Map<String, Object>> users() {
         long tenantId = TenantContext.requireTenantId();
         return jdbc.query("""
