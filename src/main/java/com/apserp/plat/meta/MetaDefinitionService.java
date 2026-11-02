@@ -23,12 +23,14 @@ public class MetaDefinitionService {
     private final JdbcTemplate jdbc;
     private final PermissionService permissionService;
     private final MetaCache cache;
+    private final MetaOverlay overlay;
 
     public MetaDefinitionService(JdbcTemplate jdbc, PermissionService permissionService,
-                                 MetaCache cache) {
+                                 MetaCache cache, MetaOverlay overlay) {
         this.jdbc = jdbc;
         this.permissionService = permissionService;
         this.cache = cache;
+        this.overlay = overlay;
     }
 
     // ---------------------------------------------------------------- DTO
@@ -65,6 +67,11 @@ public class MetaDefinitionService {
     // ---------------------------------------------------------------- 查询
 
     public List<DataObjectDto> listObjects() {
+        // 灰度用户读灰度版本快照；其余人（含平台管理员）走实时库 + 缓存
+        List<DataObjectDto> gray = overlay.objects();
+        if (gray != null) {
+            return gray;
+        }
         return cache.get("objects", "-", this::loadObjects);
     }
 
@@ -112,6 +119,10 @@ public class MetaDefinitionService {
      * Access=1 的字段标记为只读（前端渲染时应据此禁用输入）。
      */
     public List<FieldDto> listFields(String objectCode) {
+        List<FieldDto> gray = overlay.fields(objectCode);
+        if (gray != null) {
+            return gray;
+        }
         return cache.get("fields", objectCode, () -> loadFields(objectCode));
     }
 
@@ -145,6 +156,10 @@ public class MetaDefinitionService {
     }
 
     public List<ListViewDto> listViews(String objectCode) {
+        List<ListViewDto> gray = overlay.views(objectCode);
+        if (gray != null) {
+            return gray;
+        }
         return cache.get("views", objectCode, () -> loadViews(objectCode));
     }
 
@@ -180,6 +195,10 @@ public class MetaDefinitionService {
     }
 
     public List<FormLayoutDto> listFormLayouts(String objectCode) {
+        List<FormLayoutDto> gray = overlay.forms(objectCode);
+        if (gray != null) {
+            return gray;
+        }
         return cache.get("forms", objectCode, () -> loadFormLayouts(objectCode));
     }
 

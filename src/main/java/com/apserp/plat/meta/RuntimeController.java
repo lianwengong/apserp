@@ -42,16 +42,21 @@ public class RuntimeController {
     private final MetaQueryService queryService;
     private final MetaChildService childService;
     private final ActionExecutor actionExecutor;
+    private final MetaOverlay metaOverlay;
+    private final MetaPublishService publishService;
     private final PermissionService permissionService;
 
     public RuntimeController(ActionService actionService, ApprovalService approvalService,
                              MetaQueryService queryService, MetaChildService childService,
-                             ActionExecutor actionExecutor, PermissionService permissionService) {
+                             ActionExecutor actionExecutor, MetaOverlay metaOverlay,
+                             MetaPublishService publishService, PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
         this.childService = childService;
         this.actionExecutor = actionExecutor;
+        this.metaOverlay = metaOverlay;
+        this.publishService = publishService;
         this.permissionService = permissionService;
     }
 
@@ -147,6 +152,22 @@ public class RuntimeController {
                 .header("Content-Type", "text/csv; charset=UTF-8")
                 .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
                 .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    // ---------------------------------------------------------------- 元数据版本
+
+    /**
+     * 当前登录用户正在使用的元数据版本：灰度用户返回灰度版本号并标记 gray=true。
+     * 前端据此在顶栏显示「灰度中」提示，避免验收时误以为改错了。
+     */
+    @GetMapping("/meta-version")
+    public ApiResult<Map<String, Object>> metaVersion() {
+        var gray = metaOverlay.current();
+        if (gray != null) {
+            return ApiResult.ok(Map.of("version", gray.version(), "gray", true));
+        }
+        Integer current = publishService.currentVersion();
+        return ApiResult.ok(Map.of("version", current == null ? 0 : current, "gray", false));
     }
 
     // ---------------------------------------------------------------- 子表

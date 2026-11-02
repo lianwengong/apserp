@@ -39,9 +39,12 @@ public class ActionService {
     private final JdbcTemplate jdbc;
     private final PermissionService permissionService;
 
-    public ActionService(JdbcTemplate jdbc, PermissionService permissionService) {
+    private final MetaOverlay overlay;
+
+    public ActionService(JdbcTemplate jdbc, PermissionService permissionService, MetaOverlay overlay) {
         this.jdbc = jdbc;
         this.permissionService = permissionService;
+        this.overlay = overlay;
     }
 
     // ------------------------------------------------------------ DTO
@@ -83,6 +86,11 @@ public class ActionService {
     // ------------------------------------------------------------ 读取
 
     public List<ButtonDto> listButtons(String objectCode) {
+        // 灰度用户按灰度版本下发的按钮渲染（与列表/表单同源），其余人读实时库
+        List<ButtonDto> gray = overlay.buttons(objectCode);
+        if (gray != null) {
+            return gray;
+        }
         long tenantId = TenantContext.requireTenantId();
         String sql = """
                 SELECT b.Id, b.Code, b.Name, b.Text, b.Icon, b.ButtonType, b.Sort, b.Style,

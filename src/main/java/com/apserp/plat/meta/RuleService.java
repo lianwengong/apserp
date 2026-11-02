@@ -43,8 +43,11 @@ public class RuleService {
 
     private final JdbcTemplate jdbc;
 
-    public RuleService(JdbcTemplate jdbc) {
+    private final MetaOverlay overlay;
+
+    public RuleService(JdbcTemplate jdbc, MetaOverlay overlay) {
         this.jdbc = jdbc;
+        this.overlay = overlay;
     }
 
     // ------------------------------------------------------------ DTO
@@ -79,6 +82,10 @@ public class RuleService {
     // ------------------------------------------------------------ 规则 CRUD
 
     public List<RuleDto> listRules() {
+        List<RuleDto> gray = overlay.rules();
+        if (gray != null) {
+            return gray;
+        }
         long tenantId = TenantContext.requireTenantId();
         return jdbc.query("""
                         SELECT r.Id, r.Code, r.Name, r.RuleType, r.Expression, r.ErrorMessage,
@@ -162,6 +169,10 @@ public class RuleService {
     // ------------------------------------------------------------ 绑定
 
     public List<RuleBindingDto> listBindings(String objectCode) {
+        List<RuleBindingDto> gray = overlay.bindings(objectCode);
+        if (gray != null) {
+            return gray;
+        }
         long tenantId = TenantContext.requireTenantId();
         String sql = """
                 SELECT b.Id, b.RuleId, r.Code AS RuleCode, b.DataObjectId, o.Code AS ObjectCode,
@@ -226,6 +237,11 @@ public class RuleService {
 
     /** 取某对象在指定触发时机下的启用规则（按 Sort）。 */
     public List<BoundRule> rulesFor(String objectCode, int triggerEvent) {
+        List<RuleDto> grayRules = overlay.rules();
+        List<RuleBindingDto> grayBindings = overlay.bindings(objectCode);
+        if (grayRules != null && grayBindings != null) {
+            return boundFromOverlay(grayRules, grayBindings, triggerEvent);
+        }
         long tenantId = TenantContext.requireTenantId();
         return jdbc.query("""
                         SELECT r.Code, r.Name, r.Expression, r.ErrorMessage, r.Severity, b.FieldName
@@ -273,6 +289,27 @@ public class RuleService {
     }
 
     /** 删除前校验。 */
+    /** 灰度快照里的绑定 → 运行时规则列表（与实时库同构，便于保存链路直接复用）。 */
+    private List<BoundRule> boundFromOverlay(List<RuleDto> rules, List<RuleBindingDto> bindings,
+                                             int triggerEvent) {
+        Map<String, RuleDto> byCode = new java.util.LinkedHashMap<>();
+        for (RuleDto r : rules) {
+            byCode.put(r.code(), r);
+        }
+        List<BoundRule> out = new java.util.ArrayList<>();
+        bindings.stream()
+                .filter(b -> b.triggerEvent() == triggerEvent && b.enabled())
+                .sorted(java.util.Comparator.comparingInt(RuleBindingDto::sort))
+                .forEach(b -> {
+                    RuleDto r = byCode.get(b.ruleCode());
+                    if (r != null && r.enabled()) {
+                        out.add(new BoundRule(r.code(), r.name(), r.expression(), r.errorMessage(),
+                                r.severity(), b.fieldName()));
+                    }
+                });
+        return out;
+    }
+
     public void checkBeforeDelete(String objectCode, Map<String, Object> data) {
         for (BoundRule r : rulesFor(objectCode, BEFORE_DELETE)) {
             boolean pass;

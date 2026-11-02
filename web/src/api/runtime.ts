@@ -4,6 +4,9 @@ export const runtimeApi = {
   children: (objectCode: string, id: number) =>
     request<ChildGroup[]>(`/api/runtime/children${queryString({ objectCode, id })}`),
 
+  metaVersion: () =>
+    request<{ version: number; gray: boolean }>('/api/runtime/meta-version'),
+
   executeAction: (body: {
     objectCode: string
     id?: number | null

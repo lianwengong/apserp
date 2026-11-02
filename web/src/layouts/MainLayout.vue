@@ -16,6 +16,7 @@ import { SCHEMA_GROUPS, groupOf } from '../utils/schema'
 import type { DataObjectDto } from '../api/types'
 import { catalog } from '../stores/catalog'
 import { session } from '../stores/session'
+import { runtimeApi } from '../api/runtime'
 
 interface TabItem {
   key: string
@@ -25,6 +26,7 @@ interface TabItem {
   closable: boolean
 }
 
+const metaVersion = ref<{ version: number; gray: boolean }>({ version: 0, gray: false })
 const route = useRoute()
 const router = useRouter()
 
@@ -51,8 +53,13 @@ const groups = computed(() => {
     .map((group) => ({ ...group, objects: buckets.get(group.code) ?? [] }))
 })
 
-onMounted(() => {
+onMounted(async () => {
   void catalog.load()
+  try {
+    metaVersion.value = await runtimeApi.metaVersion()
+  } catch {
+    // 版本信息拿不到不影响布局
+  }
 })
 
 // ---------------------------------------------------------------- 标签页
@@ -253,6 +260,11 @@ function onUserCommand(command: string): void {
 
         <div class="spacer" />
 
+        <el-tooltip v-if="metaVersion.gray" content="你正在使用灰度版本的元数据配置" placement="bottom">
+          <el-tag size="small" type="warning" effect="dark" class="gray-tag">
+            灰度 v{{ metaVersion.version }}
+          </el-tag>
+        </el-tooltip>
         <el-tag v-if="user" size="small" effect="plain" class="tenant-tag">
           {{ user.tenantCode }}
         </el-tag>
@@ -500,6 +512,7 @@ function onUserCommand(command: string): void {
   background: var(--bg);
 }
 
+.gray-tag { margin-right: 6px; }
 .topbar {
   display: flex;
   align-items: center;
