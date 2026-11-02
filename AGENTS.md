@@ -102,6 +102,9 @@ src/test/java/com/apserp/
 | 2026-11-02 | Playwright 用 `innerText` 断言设计器表格内容：值都在 `<input>` 里，`innerText` 拿到的是空表格 → 误判失败 | 表单类断言用 `inputValue()` 或直接数行；表格里的文本只用于断言表头 |
 | 2026-11-02 | 打印/导出的 HTML 直接插值单据字段：单据名里写 `<script>` 就能打穿打印页 | 模板占位符一律 HTML 转义（`PrintService.escape`），并加断言「不会输出 `<script>`」 |
 | 2026-11-02 | 新增子表（DocStatus / DocTransition / PrintTemplate）后，发布回滚报外键冲突 `DELETE plat.DataObject` | 回滚顺序：先删所有指向 DataObject 的子表（关系、状态、流转、打印模板），再删对象；同时把这些表加入发布快照，否则回滚后配置丢失 |
+| 2026-11-02 | 前端侧边栏按数据对象拼菜单，只有 3 个对象，563 项功能菜单完全不可见；其实 `plat.Menu` 已有 636 条（10 域 / 62 模块） | 新增 `GET /api/menu/tree` 按 ParentId 组树，做租户/终端（MenuTerminal）/权限过滤；侧边栏改菜单树，未绑 `PageId` 的菜单进 `/m/:code` 占位页。菜单与对象不是一一对应 |
+| 2026-11-02 | `plat.Menu` 存在同名节点（「角色管理」「登录用户」重复），按原样渲染会出现重复菜单 | 前端不做隐式去重；菜单治理需按 ParentId+Code 清理/合并历史数据 |
+| 2026-11-02 | 平台管理入口散落在「平台与主数据」里，管理员没有独立控制台；租户列表也没有查询接口 | 新增 `V38__089_platform_admin_menus.sql`（8 模块 / 32 入口）+ `/admin` 概览、`/admin/tenants`、`/admin/menus`；未实现页面走 `/m/:code` 占位；平台管理菜单仅平台管理员可见 |
 
 
 

@@ -38,10 +38,11 @@ web/
     api/                http 封装 + 后端 DTO 类型 + 各端点函数
     stores/             session（token/权限点）、catalog（数据对象目录）
     router/             hash 路由 + 登录守卫
-    layouts/            主框架：侧边栏对象菜单、面包屑、多标签页
-    views/              Login / Home / MetaList / 403 / 404
-    components/         MetaFormDialog（保存引擎表单）、CellValue（单元格渲染）
-    utils/              format（日期/数字/布尔）、schema（业务域分组与图标）
+    layouts/            主框架：侧边栏功能菜单、面包屑、多标签页
+    views/              Login / Home / MetaList / MenuPlaceholder / 403 / 404
+    components/         MetaFormDialog、MenuTree、CellValue
+    stores/             session / catalog / menus
+    utils/              format（日期/数字/布尔）、schema（业务域分组与图标）、menu（菜单过滤/查找）
     styles/base.css     设计变量 + Element Plus 主题覆盖
 ```
 
@@ -52,8 +53,24 @@ web/
 - **字段权限**：`GET /api/perm/fields` 返回 `Access`（0 不可见/1 只读/2 可写）；不可见字段不渲染，只读字段禁用输入。
 - **表单**：读取默认 `FormLayout`（控件类型、必填、只读、隐藏、列数、跨度）；控件映射 1 文本 / 2 整数 / 3 金额 / 4 日期 / 6 查找 / 8 开关；查找对象未配置时降级为手工输入 ID，并在占位符里说明。
 - **保存**：`POST /api/meta/{objectCode}` 原样提交 JSON——新增不带 `Id`，修改带 `Id`；空的可选字段新增时不提交（交给数据库默认值），NOT NULL 数字默认 0，避免“空值写空”把 INSERT/UPDATE 打挂。
-- **多标签页 / 面包屑 / 侧边栏**：数据对象按 `md/pur/sal/inv/...` 前缀分组，标签页在 sessionStorage 内保持，刷新后仍停留原对象。
+- **功能菜单（侧边栏）**：`GET /api/menu/tree` 把 `plat.Menu` 组树（10 个业务域 + 平台管理，约 677 个节点），按租户、终端（PC/PDA/POS…）与权限点过滤；侧边栏支持逐级展开、关键字搜索、折叠。叶子菜单进入 `/m/{code}`：已绑定页面/对象的走真实路由，未绑定的显示「菜单已登记 · 页面未绑定」占位页，并提供「去设计器绑定」入口。
+- **多标签页 / 面包屑**：数据对象按 `md/pur/sal/inv/...` 前缀分组，标签页在 sessionStorage 内保持，刷新后仍停留原对象；菜单页 tab 用菜单名作为标题。
 - **导出**：当前筛选条件下最多 500 行 CSV（带 BOM，Excel 直接打开）。
+
+## 平台管理（平台管理员）
+
+侧边栏「功能菜单 → 平台管理」是独立的管理控制台入口（`V38__089_platform_admin_menus.sql`，8 个模块 / 32 个功能入口，仅平台管理员可见）：
+
+| 模块 | 入口 | 状态 |
+|---|---|---|
+| 平台概览 | `/admin` | 可用：租户数、对象/菜单/版本统计、模块快捷入口 |
+| 租户与组织 | `/admin/tenants` | 租户列表可用（只读）；组织架构、用户管理占位；角色与权限跳设计器 |
+| 元数据设计 | `/design?tab=*`、`/admin/menus` | 数据对象/字段、子表、规则、按钮、审批、发布可用；菜单总览只读；页面/模块管理占位 |
+| 规则与流程 | `/design?tab=rule/button/approval`、`/workflow`、`/todo` | 可用 |
+| 基础配置 | `/m/900501…` | 占位（字典/编号/参数/消息模板尚未实现） |
+| 安全与审计 | `/m/900601…` | 占位（日志/导出审计/备份尚未实现） |
+| 集成与开放 | `/m/900701…` | 占位（OpenAPI/Webhook/SSO 尚未实现） |
+| 运维与监控 | `/m/900801…` | 占位（任务/缓存/附件/通知尚未实现） |
 
 ## 与后端的契约
 
@@ -63,6 +80,8 @@ web/
 | `GET /api/perm/me` | 权限点、是否平台管理员 |
 | `GET /api/perm/fields?objectCode=` | 字段级权限 `field -> 0/1/2` |
 | `GET /api/meta/objects` | 数据对象目录 |
+| `GET /api/menu/tree?terminal=1` | 功能模块菜单树（按租户/终端/权限过滤） |
+| `GET /api/admin/tenants` | 平台管理员：租户列表（只读） |
 | `GET /api/meta/objects/{code}/{fields,views,forms}` | 渲染配置 |
 | `GET /api/meta/{code}?filters=&sort=&page=&size=` | 列表（引擎内完成过滤/排序/分页） |
 | `POST /api/meta/{code}` | 保存（新增/修改同一入口） |
@@ -74,12 +93,15 @@ web/
 3. **排序只升序**：`@Sort` 是逗号分隔字段名，引擎统一追加 `ASC`；传入 `desc` 不会生效。前端点击降序时提示并清除。
 4. **`filters` 是 JSON 字符串**：`[{"f":"Name","op":"like","v":"农夫"}]`，字段名必须在 `DataObjectField` 白名单内。
 5. **错误码**：`401` 统一回登录页；`403` 渲染无权限页；`404` 渲染对象不存在页；其余弹后端 `message`。
+6. **菜单与对象不是一一对应**：菜单来自 `plat.Menu`（`MenuId → PageId / Route`），数据对象来自 `plat.DataObject`。当前只有极少数菜单绑定了 `PageId`，所以大多数菜单会落到 `/m/{code}` 占位页；等页面/对象绑定后自动变成真实页面。
 
 ## 已知限制 / 下一步
 
 - `/api/perm/me` 只返回权限点集合，不含 `CanWrite/CanDelete` 等动作位：写按钮按「有该数据对象权限」显示，实际由服务端拦截（403）。后端补动作位后按位控制即可。
 - 暂无删除/审批/附件/子表控件；`MetaFormDialog` 的控件映射预留了扩展位。
-- 菜单来自数据对象目录（尚无 `plat.Menu` 查询接口）；菜单设计器/页面设计器未迁入本周范围。
+- 功能菜单已接入：`plat.Menu` 当前 677 条（租户 1，含平台管理 41 条），10 个业务域 + 1 个平台管理域；绝大多数业务菜单未绑定 `PageId`/数据对象，点击进入占位页，需逐个绑定后才会变成可用业务页面。
+- 平台管理的租户列表只读；开通租户后端已有 `POST /api/admin/tenants/{id}/provision`，前端开通向导与停用/到期管理尚未接入；组织/用户/字典/审计/集成/运维页面仍是占位。
+- `plat.Menu` 里存在同名节点（如「角色管理」「登录用户」重复出现），属于历史菜单数据，需要菜单治理/去重，前端目前按原样展示。
 - 登录返回 `mustChangePassword`，但后端暂无改密接口，界面先不强制。
 - 导出为前端 CSV（≤500 行）；大数据量导出应走后端 `export` 权限 + 异步任务。
 - **安全项（后端待修）**：Flyway 迁移连接会设置 `SESSION_CONTEXT('BypassRls', 1)`，连接归还 Hikari 后未清除；后续请求若复用该连接会绕过 RLS，看到其它租户的元数据（表现为列表排序时报「列名 'Sort' 不明确」）。建议 `TenantAwareDataSource` 在每次借出连接时显式把 `BypassRls` 置 0/NULL，或让 Flyway 使用独立连接池。
@@ -88,4 +110,6 @@ web/
 
 - `npm run typecheck`、`npm run build` 全绿（当前产物 gzip ≈ 390 KB）。
 - 端到端脚本：`tools/shot/apserp-web-check.mjs`（Playwright + 本机 Edge），覆盖登录 → 列表 → 关键字筛选 → 新建 → 编辑 → 导出 → 切换对象 → 刷新保持会话，当前 10/10 通过、控制台 0 错误。
-- 展示截图：`tools/shot/apserp-final-*.png`。
+- 菜单脚本：`tools/shot/apserp-menu-check.mjs`，覆盖 10 个根域、展开、搜索「品牌」、点击菜单进入占位页，控制台 0 错误。
+- 平台管理脚本：`tools/shot/apserp-admin-check.mjs`，覆盖平台管理根、8 个模块、平台概览、租户列表、菜单总览，控制台 0 错误。
+- 展示截图：`tools/shot/apserp-final-*.png`、`tools/shot/apserp-menu*.png`、`tools/shot/apserp-admin-*.png`。

@@ -1,0 +1,92 @@
+package com.apserp.plat.menu;
+
+import com.apserp.common.ApiResult;
+import com.apserp.common.security.RequiresPermission;
+import java.util.List;
+import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 系统功能模块管理窗口接口。
+ *
+ * <pre>
+ * 概览    GET    /api/admin/modules/overview
+ * 模块树  GET    /api/admin/modules/tree?keyword=
+ * 保存    POST   /api/admin/modules                     带 id 即更新
+ * 删除    DELETE /api/admin/modules/{id}?force=
+ * 功能点  GET    /api/admin/modules/{moduleId}/functions
+ *         POST   /api/admin/modules/functions           带 id 即更新
+ *         DELETE /api/admin/modules/functions/{id}
+ * 动作链  PUT    /api/admin/modules/functions/{id}/actions
+ * </pre>
+ */
+@RestController
+@RequestMapping("/api/admin/modules")
+@RequiresPermission(value = "DESIGN:module", action = "read")
+public class ModuleAdminController {
+
+    private final ModuleAdminService moduleAdmin;
+
+    public ModuleAdminController(ModuleAdminService moduleAdmin) {
+        this.moduleAdmin = moduleAdmin;
+    }
+
+    @GetMapping("/overview")
+    public ApiResult<Map<String, Object>> overview() {
+        return ApiResult.ok(moduleAdmin.overview());
+    }
+
+    @GetMapping("/tree")
+    public ApiResult<List<ModuleAdminService.ModuleNode>> tree(
+            @RequestParam(required = false) String keyword) {
+        return ApiResult.ok(moduleAdmin.tree(keyword));
+    }
+
+    @PostMapping
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<Map<String, Long>> save(@RequestBody ModuleAdminService.ModuleSaveRequest body) {
+        return ApiResult.ok(Map.of("id", moduleAdmin.saveModule(body)));
+    }
+
+    @DeleteMapping("/{id}")
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<Void> delete(@PathVariable long id,
+                                  @RequestParam(defaultValue = "false") boolean force) {
+        moduleAdmin.deleteModule(id, force);
+        return ApiResult.ok(null);
+    }
+
+    @GetMapping("/{moduleId}/functions")
+    public ApiResult<List<ModuleAdminService.FunctionDto>> functions(@PathVariable long moduleId) {
+        return ApiResult.ok(moduleAdmin.functionsOf(moduleId));
+    }
+
+    @PostMapping("/functions")
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<Map<String, Long>> saveFunction(
+            @RequestBody ModuleAdminService.FunctionSaveRequest body) {
+        return ApiResult.ok(Map.of("id", moduleAdmin.saveFunction(body)));
+    }
+
+    @DeleteMapping("/functions/{id}")
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<Void> deleteFunction(@PathVariable long id) {
+        moduleAdmin.deleteFunction(id);
+        return ApiResult.ok(null);
+    }
+
+    @org.springframework.web.bind.annotation.PutMapping("/functions/{id}/actions")
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<List<ModuleAdminService.ActionDto>> saveActions(
+            @PathVariable long id,
+            @RequestBody(required = false) List<ModuleAdminService.ActionSaveRequest> body) {
+        return ApiResult.ok(moduleAdmin.saveActions(id, body));
+    }
+}

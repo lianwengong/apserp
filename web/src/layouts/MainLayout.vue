@@ -8,14 +8,19 @@ import {
   Fold,
   Grid,
   HomeFilled,
+  Search,
   Setting,
   SwitchButton
 } from '@element-plus/icons-vue'
 import type { SchemaGroup } from '../utils/schema'
 import { SCHEMA_GROUPS, groupOf } from '../utils/schema'
 import type { DataObjectDto } from '../api/types'
+import type { MenuNode } from '../api/menu'
 import { catalog } from '../stores/catalog'
+import { menus } from '../stores/menu'
 import { session } from '../stores/session'
+import { filterMenuTree, findMenuName } from '../utils/menu'
+import MenuTree from '../components/MenuTree.vue'
 import { runtimeApi } from '../api/runtime'
 
 interface TabItem {
@@ -53,8 +58,12 @@ const groups = computed(() => {
     .map((group) => ({ ...group, objects: buckets.get(group.code) ?? [] }))
 })
 
+const menuKeyword = ref('')
+const filteredMenus = computed(() => filterMenuTree(menus.state.tree, menuKeyword.value))
+
 onMounted(async () => {
   void catalog.load()
+  void menus.load()
   try {
     metaVersion.value = await runtimeApi.metaVersion()
   } catch {
@@ -87,6 +96,36 @@ function currentCode(): string {
   return typeof route.params.code === 'string' ? route.params.code : ''
 }
 
+function menuName(): string {
+  const queryName = route.query.name
+  if (typeof queryName === 'string' && queryName) return queryName
+  const code = String(route.params.code ?? '')
+  return findMenuName(menus.state.tree, code) ?? (code || '功能页面')
+}
+
+function openMenu(node: MenuNode): void {
+  const target = node.route
+  if (!target) return
+  if (target.startsWith('/m/')) {
+    void router.push({
+      name: 'menu-page',
+      params: { code: node.code },
+      query: { name: node.name, path: target }
+    })
+    return
+  }
+  const resolved = router.resolve(target)
+  if (resolved.matched.length > 0 && resolved.name !== 'not-found') {
+    void router.push(target)
+    return
+  }
+  void router.push({
+    name: 'menu-page',
+    params: { code: node.code },
+    query: { name: node.name, path: target }
+  })
+}
+
 const activeKey = computed(() => (route.name === 'home' ? '/' : route.path))
 
 function labelOf(tab: TabItem): string {
@@ -105,6 +144,13 @@ function ensureTab(): void {
     saveTabs()
     return
   }
+  if (route.name === 'menu-page') {
+    const existing = tabs.value.find((tab) => tab.key === route.path)
+    if (existing) existing.label = menuName()
+    else tabs.value.push({ key: route.path, label: menuName(), closable: true })
+    saveTabs()
+    return
+  }
   if (route.name === 'forbidden' || route.name === 'not-found') return
   if (!tabs.value.some((tab) => tab.key === route.path)) {
     tabs.value.push({ key: route.path, label: route.meta.title ?? '页面', closable: true })
@@ -113,6 +159,14 @@ function ensureTab(): void {
 }
 
 watch(() => route.fullPath, ensureTab, { immediate: true })
+
+// 菜单树异步加载完成后，补全直接访问 /m/:code 时的 tab 标题
+watch(
+  () => menus.state.tree,
+  () => {
+    if (route.name === 'menu-page') ensureTab()
+  }
+)
 
 function openTab(tab: TabItem): void {
   if (tab.key !== route.path) void router.push(tab.key)
@@ -140,6 +194,16 @@ const breadcrumb = computed<{ label: string; to?: string }[]>(() => {
       { label: '工作台', to: '/' },
       { label: groupOf(code).label },
       { label: object?.name ?? code }
+    ]
+  }
+  if (route.name === 'menu-page') {
+    return [{ label: '工作台', to: '/' }, { label: '功能菜单' }, { label: menuName() }]
+  }
+  if (route.path.startsWith('/admin')) {
+    return [
+      { label: '工作台', to: '/' },
+      { label: '平台管理' },
+      { label: route.meta.title ?? '平台页面' }
     ]
   }
   return [{ label: '工作台', to: '/' }, { label: route.meta.title ?? '页面' }]
@@ -188,7 +252,57 @@ function onUserCommand(command: string): void {
               <span class="item-name">流程中心</span>
               <span class="item-code mono">flow</span>
             </router-link>
+            <router-link
+              to="/system/modules"
+              class="menu-item"
+              :class="{ active: route.path === '/system/modules' }"
+            >
+              <span class="dot" />
+              <span class="item-name">功能模块管理</span>
+              <span class="item-code mono">module</span>
+            </router-link>
+            <router-link
+              to="/system/menus"
+              class="menu-item"
+              :class="{ active: route.path === '/system/menus' }"
+            >
+              <span class="dot" />
+              <span class="item-name">菜单设置</span>
+              <span class="item-code mono">menu</span>
+            </router-link>
           </div>
+
+          <div class="menu-group">
+            <div class="menu-group-label">
+              <el-icon><Grid /></el-icon>
+              <span>功能菜单</span>
+            </div>
+            <el-input
+              v-model="menuKeyword"
+              class="menu-search"
+              size="small"
+              placeholder="搜索模块 / 功能"
+              clearable
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <MenuTree
+              :nodes="filteredMenus"
+              :current-path="route.path"
+              :force-expand="menuKeyword.length > 0"
+              @select="openMenu"
+            />
+            <div v-if="menus.state.loading" class="menu-hint">正在加载功能菜单…</div>
+            <div v-else-if="menus.state.error" class="menu-hint is-error">
+              {{ menus.state.error }}
+            </div>
+            <div v-else-if="!filteredMenus.length" class="menu-hint">
+              {{ menuKeyword ? '没有匹配的功能' : '尚无功能菜单' }}
+            </div>
+          </div>
+
           <div v-for="group in groups" :key="group.code" class="menu-group">
             <div class="menu-group-label">
               <el-icon><component :is="group.icon" /></el-icon>
@@ -214,6 +328,11 @@ function onUserCommand(command: string): void {
         </nav>
 
         <nav v-else class="menu is-icon-only">
+          <el-tooltip content="展开功能菜单" placement="right">
+            <button type="button" class="menu-item icon-only" @click="collapsed = false">
+              <el-icon><Expand /></el-icon>
+            </button>
+          </el-tooltip>
           <el-tooltip
             v-for="object in catalog.state.objects"
             :key="object.code"
@@ -659,5 +778,34 @@ function onUserCommand(command: string): void {
   min-height: 0;
   overflow: auto;
   padding: 14px 16px 18px;
+}
+
+.menu-search {
+  padding: 2px 4px 6px;
+}
+
+.menu-search :deep(.el-input__wrapper) {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+}
+
+.menu-search :deep(.el-input__wrapper.is-focus) {
+  border-color: rgba(63, 191, 146, 0.45);
+}
+
+.menu-search :deep(.el-input__inner) {
+  height: 26px;
+  color: #d7e0ea;
+  font-size: 12px;
+}
+
+.menu-search :deep(.el-input__inner::placeholder) {
+  color: #6f8296;
+}
+
+.menu-search :deep(.el-input__prefix),
+.menu-search :deep(.el-input__suffix) {
+  color: #7e90a4;
 }
 </style>

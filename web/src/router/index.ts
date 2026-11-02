@@ -6,6 +6,12 @@ import MetaListView from '../views/MetaListView.vue'
 import DesignerView from '../views/design/DesignerView.vue'
 import TodoView from '../views/TodoView.vue'
 import WorkflowCenter from '../views/WorkflowCenter.vue'
+import ModuleAdminView from '../views/system/ModuleAdminView.vue'
+import MenuAdminView from '../views/system/MenuAdminView.vue'
+import MenuPlaceholder from '../views/MenuPlaceholder.vue'
+import PlatformOverview from '../views/admin/PlatformOverview.vue'
+import TenantListView from '../views/admin/TenantListView.vue'
+import MenuOverviewView from '../views/admin/MenuOverviewView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { session } from '../stores/session'
@@ -42,6 +48,32 @@ const router = createRouter({
         { path: 'design', name: 'design', component: DesignerView, meta: { title: '设计器中心' } },
         { path: 'todo', name: 'todo', component: TodoView, meta: { title: '我的待办' } },
         { path: 'workflow', name: 'workflow', component: WorkflowCenter, meta: { title: '流程中心' } },
+        { path: 'system/modules', name: 'system-modules', component: ModuleAdminView, meta: { title: '功能模块管理' } },
+        { path: 'system/menus', name: 'system-menus', component: MenuAdminView, meta: { title: '菜单设置' } },
+        {
+          path: 'm/:code',
+          name: 'menu-page',
+          component: MenuPlaceholder,
+          meta: { title: '功能页面' }
+        },
+        {
+          path: 'admin',
+          name: 'platform-overview',
+          component: PlatformOverview,
+          meta: { title: '平台概览' }
+        },
+        {
+          path: 'admin/tenants',
+          name: 'platform-tenants',
+          component: TenantListView,
+          meta: { title: '租户管理' }
+        },
+        {
+          path: 'admin/menus',
+          name: 'platform-menus',
+          component: MenuOverviewView,
+          meta: { title: '菜单总览' }
+        },
         { path: '403', name: 'forbidden', component: ForbiddenView, meta: { title: '无访问权限' } },
         {
           path: ':pathMatch(.*)*',
