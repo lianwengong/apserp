@@ -87,6 +87,8 @@ apserp/
 | 打印模板 | `/api/runtime/print`、`plat.PrintTemplate` | HTML 占位符模板（`{{Field}}`、`{{#子表}}`），输出转义，浏览器直接打印/存 PDF |
 | 发布与回滚 | `/api/design/versions/**` | 全量快照 + diff + 整体回滚 + **灰度发布**（名单内用户按新版读元数据）|
 | 元数据缓存 | `MetaCache` | 60 秒 TTL + 发布/回滚/激活显式失效，key 带租户 |
+| 功能模块管理 | `/#/system/modules`、`/api/admin/modules/**` | 模块树 → 功能点 → 动作链；保存自动补 `MOD:`/`FUN:` 权限点，删除时回收 |
+| 菜单设置 | `/#/system/menus`、`/api/admin/menus/**` | 菜单树（含停用节点）、绑页面自动补路由、终端可见性、上下移排序；改完侧边栏立即生效 |
 | 设计器中心 | `/#/design` | 字段 / 子表 / 状态机 / 打印模板 / 规则 / 按钮 / 审批 / 权限 / 发布 九个页签 |
 
 ## 已知限制（第一周内解决）
