@@ -9,7 +9,23 @@
               <el-button size="small" type="primary" :loading="publishing" @click="publish">发布当前配置</el-button>
             </div>
           </template>
-          <el-input v-model="remark" size="small" placeholder="本次发布说明（必填，便于回溯）" style="margin-bottom: 10px" />
+          <el-input v-model="remark" size="small" placeholder="本次发布说明（必填，便于回溯）" style="margin-bottom: 8px" />
+          <el-select
+            v-model="grayUserIds"
+            size="small"
+            multiple
+            collapse-tags
+            filterable
+            clearable
+            placeholder="灰度名单（留空=全量生效）"
+            style="width: 100%; margin-bottom: 8px"
+          >
+            <el-option v-for="u in users" :key="u.id" :value="u.id" :label="u.displayName || u.userName" />
+          </el-select>
+          <div class="active-line">
+            当前生效版本：<b>v{{ activeVersion ?? '—' }}</b>
+            <span class="muted"> · 缓存 {{ cacheEntries }} 条</span>
+          </div>
           <el-alert type="warning" :closable="false" show-icon>
             发布会把当前租户的全部元数据（对象/字段/视图/表单/按钮/规则/审批/权限）打成一个快照。
             回滚会<b>整体替换</b>这些配置，业务单据数据不受影响。
@@ -48,6 +64,9 @@
               <span>版本对比 <b v-if="selected">v{{ selected }}</b></span>
               <div>
                 <el-button size="small" :disabled="!selected" @click="loadDiff">对比当前</el-button>
+                <el-button size="small" type="success" plain :disabled="!selected" @click="activate">
+                  激活为当前版本
+                </el-button>
                 <el-button size="small" type="danger" plain :disabled="!selected" @click="rollback">回滚到此版本</el-button>
               </div>
             </div>
@@ -84,6 +103,10 @@ import { designApi, type VersionDto, type DiffResult } from '../../api/design'
 const versions = ref<VersionDto[]>([])
 const selected = ref<number | null>(null)
 const remark = ref('')
+const grayUserIds = ref<number[]>([])
+const users = ref<{ id: number; userName: string; displayName: string }[]>([])
+const activeVersion = ref<number | null>(null)
+const cacheEntries = ref(0)
 const publishing = ref(false)
 const diff = reactive<DiffResult>({ fromVersion: null, toVersion: null, items: [] })
 
@@ -124,8 +147,29 @@ async function load() {
   try {
     versions.value = await designApi.versions()
     if (!selected.value && versions.value.length) selected.value = versions.value[0].version
+    const cur = await designApi.currentVersion()
+    activeVersion.value = cur.version || null
+    cacheEntries.value = Number(cur.cache?.entries ?? 0)
+    if (!users.value.length) users.value = await designApi.approvalUsers()
   } catch (e) {
     ElMessage.error((e as Error).message)
+  }
+}
+
+/** 激活所选版本：全量生效（灰度名单在发布时指定） */
+async function activate() {
+  if (!selected.value) return
+  try {
+    await ElMessageBox.confirm(
+      `把 v${selected.value} 激活为当前版本？全量用户立即生效（元数据缓存会失效重建）。`,
+      '确认激活',
+      { type: 'warning' }
+    )
+    await designApi.activate(selected.value, [], `激活 v${selected.value}`)
+    ElMessage.success(`v${selected.value} 已生效`)
+    await load()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error((e as Error).message)
   }
 }
 
@@ -138,7 +182,7 @@ async function publish() {
   if (!remark.value.trim()) return ElMessage.warning('请填写发布说明')
   publishing.value = true
   try {
-    const r = await designApi.publish(remark.value.trim())
+    const r = await designApi.publish(remark.value.trim(), grayUserIds.value)
     ElMessage.success(`已发布 v${r.version}（${(r.sizeBytes / 1024).toFixed(1)} KB）`)
     remark.value = ''
     await load()
@@ -192,5 +236,7 @@ onMounted(load)
 .version-time { margin-left: auto; font-size: 11px; color: var(--el-text-color-secondary); }
 .version-remark { font-size: 12px; margin: 2px 0; }
 .version-meta { font-size: 11px; color: var(--el-text-color-secondary); }
+.active-line { font-size: 12px; margin-bottom: 8px; }
+.muted { color: var(--el-text-color-secondary); }
 .summary { font-size: 12px; color: var(--el-text-color-secondary); margin-top: 8px; }
 </style>

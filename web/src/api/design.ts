@@ -58,8 +58,22 @@ export const designApi = {
     request<{ id: number; userName: string; displayName: string }[]>('/api/design/approvals/users'),
 
   // ---------------- 发布
-  publish: (remark: string) =>
-    request<PublishResult>('/api/design/publish', { method: 'POST', body: { remark } }),
+  currentVersion: () =>
+    request<{ version: number; cache: Record<string, number> }>('/api/design/versions/current'),
+
+  grayOf: (version: number) =>
+    request<{ version: number; userIds: number[]; userNames: string[] }>(
+      `/api/design/versions/${version}/gray`
+    ),
+
+  activate: (version: number, userIds: number[], remark?: string) =>
+    request<{ version: number }>(`/api/design/versions/${version}/activate`, {
+      method: 'POST',
+      body: { userIds, remark: remark ?? '' }
+    }),
+
+  publish: (remark: string, grayUserIds: number[] = []) =>
+    request<PublishResult>('/api/design/publish', { method: 'POST', body: { remark, grayUserIds } }),
   versions: () => request<VersionDto[]>('/api/design/versions'),
   version: (version: number) => request<Record<string, unknown>>(`/api/design/versions/${version}`),
   rollback: (version: number, remark?: string) =>

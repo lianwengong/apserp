@@ -61,17 +61,19 @@ public class DesignerController {
     private final MetaPublishService publishService;
     private final PermissionDesignService permissionDesign;
     private final MetaChildService childService;
+    private final MetaCache metaCache;
 
     public DesignerController(RuleService ruleService, ActionService actionService,
                               ApprovalService approvalService, MetaPublishService publishService,
                               PermissionDesignService permissionDesign,
-                              MetaChildService childService) {
+                              MetaChildService childService, MetaCache metaCache) {
         this.ruleService = ruleService;
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.publishService = publishService;
         this.permissionDesign = permissionDesign;
         this.childService = childService;
+        this.metaCache = metaCache;
     }
 
     // ---------------------------------------------------------------- 概览
@@ -246,8 +248,46 @@ public class DesignerController {
 
     @PostMapping("/publish")
     @RequiresPermission(value = "DESIGN:publish", action = "write")
-    public ApiResult<MetaPublishService.PublishResult> publish(@RequestBody Map<String, String> body) {
-        return ApiResult.ok(publishService.publish(body.getOrDefault("remark", "")));
+    public ApiResult<MetaPublishService.PublishResult> publish(@RequestBody(required = false) Map<String, Object> body) {
+        String remark = body == null || body.get("remark") == null ? null : String.valueOf(body.get("remark"));
+        List<Long> gray = List.of();
+        Object raw = body == null ? null : body.get("grayUserIds");
+        if (raw instanceof List<?> list) {
+            gray = list.stream().filter(x -> x instanceof Number)
+                    .map(x -> ((Number) x).longValue()).toList();
+        }
+        return ApiResult.ok(publishService.publish(remark, gray));
+    }
+
+    /** 当前生效版本 + 缓存统计（发布后想确认「大家到底在用哪一版」看这里）。 */
+    @GetMapping("/versions/current")
+    @RequiresPermission(value = "DESIGN:publish", action = "read")
+    public ApiResult<Map<String, Object>> currentVersion() {
+        Integer current = publishService.currentVersion();
+        return ApiResult.ok(Map.of(
+                "version", current == null ? 0 : current,
+                "cache", metaCache.stats()));
+    }
+
+    /** 灰度名单：哪些用户先吃到这一版。 */
+    @GetMapping("/versions/{version}/gray")
+    @RequiresPermission(value = "DESIGN:publish", action = "read")
+    public ApiResult<MetaPublishService.GrayDto> grayOf(@PathVariable int version) {
+        return ApiResult.ok(publishService.grayOf(version));
+    }
+
+    /** 激活版本：不带 userIds = 全量生效；带 = 只对这些用户灰度。 */
+    @PostMapping("/versions/{version}/activate")
+    @RequiresPermission(value = "DESIGN:publish", action = "write")
+    public ApiResult<MetaPublishService.PublishResult> activate(@PathVariable int version,
+                                                                @RequestBody(required = false) ActivateBody body) {
+        return ApiResult.ok(publishService.activate(version,
+                body == null || body.userIds() == null ? List.of() : body.userIds(),
+                body == null ? null : body.remark()));
+    }
+
+    public record ActivateBody(List<Long> userIds, String remark) {
+
     }
 
     @GetMapping("/versions")

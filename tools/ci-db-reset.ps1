@@ -32,5 +32,5 @@ $grant = "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '$Ap
 & $sqlcmd -S $Server -E -b -d $TestDb -Q $grant
 if ($LASTEXITCODE -ne 0) { throw 'grant failed' }
 
-Write-Host "test db ready: $TestDb (empty; Flyway will replay V1..V28 on next start)" -ForegroundColor Green
+Write-Host "test db ready: $TestDb (empty; Flyway will replay all migrations on next start)" -ForegroundColor Green
 Write-Host "url: jdbc:sqlserver://localhost:1433;databaseName=$TestDb;encrypt=false;trustServerCertificate=true"

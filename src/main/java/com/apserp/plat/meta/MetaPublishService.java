@@ -45,13 +45,18 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class MetaPublishService {
 
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(MetaPublishService.class);
+
     private static final String SCOPE = "meta";
 
     private final JdbcTemplate jdbc;
+    private final MetaCache cache;
     private final ObjectMapper json = new ObjectMapper();
 
-    public MetaPublishService(JdbcTemplate jdbc) {
+    public MetaPublishService(JdbcTemplate jdbc, MetaCache cache) {
         this.jdbc = jdbc;
+        this.cache = cache;
     }
 
     // ------------------------------------------------------------ DTO
@@ -73,7 +78,16 @@ public class MetaPublishService {
     // ------------------------------------------------------------ 发布
 
     @Transactional
+    /** 全量发布：发布即当前生效版本。 */
     public PublishResult publish(String remark) {
+        return publish(remark, List.of());
+    }
+
+    /**
+     * 发布：给了灰度名单时 Status=2（灰度中），名单里的用户先吃到这一版；
+     * 否则 Status=1（当前生效），并把它之前的生效版本降为历史。
+     */
+    public PublishResult publish(String remark, List<Long> grayUserIds) {
         long tenantId = TenantContext.requireTenantId();
         Map<String, Object> snapshot = snapshot(tenantId);
         String payload = toJson(snapshot);
@@ -81,12 +95,107 @@ public class MetaPublishService {
         int version = jdbc.queryForObject("""
                 SELECT ISNULL(MAX(Version), 0) + 1 FROM plat.MetaVersion WHERE TenantId = ? AND Scope = ?
                 """, Integer.class, tenantId, SCOPE);
+        boolean gray = grayUserIds != null && !grayUserIds.isEmpty();
+        if (!gray) {
+            jdbc.update("UPDATE plat.MetaVersion SET Status = 0 WHERE TenantId = ? AND Scope = ? AND Status <> 0",
+                    tenantId, SCOPE);
+        }
         jdbc.update("""
                 INSERT plat.MetaVersion (TenantId, Version, Scope, ContentHash, Payload, PublishedBy,
                                          PublishedAt, Status, Remark)
-                VALUES (?, ?, ?, ?, ?, ?, sysutcdatetime(), 1, ?)
-                """, tenantId, version, SCOPE, hash, payload, TenantContext.userId(), remark);
+                VALUES (?, ?, ?, ?, ?, ?, sysutcdatetime(), ?, ?)
+                """, tenantId, version, SCOPE, hash, payload, TenantContext.userId(), gray ? 2 : 1, remark);
+        if (gray) {
+            saveGray(tenantId, version, grayUserIds);
+        }
+        cache.invalidateTenant();
+        log.info("meta_publish tenant={} version={} gray={} users={}",
+                tenantId, version, gray, gray ? grayUserIds.size() : 0);
         return new PublishResult(version, hash, payload.getBytes(StandardCharsets.UTF_8).length);
+    }
+
+    private void saveGray(long tenantId, int version, List<Long> userIds) {
+        Long versionId = jdbc.queryForObject("""
+                SELECT Id FROM plat.MetaVersion WHERE TenantId = ? AND Scope = ? AND Version = ?
+                """, Long.class, tenantId, SCOPE, version);
+        for (Long userId : userIds) {
+            if (userId == null) {
+                continue;
+            }
+            jdbc.update("""
+                    INSERT plat.MetaVersionGray (TenantId, MetaVersionId, UserId)
+                    VALUES (?, ?, ?)
+                    """, tenantId, versionId, userId);
+        }
+    }
+
+    public record GrayDto(int version, List<Long> userIds, List<String> userNames) {
+    }
+
+    /** 当前灰度版本与名单。 */
+    public GrayDto grayOf(int version) {
+        long tenantId = TenantContext.requireTenantId();
+        Long versionId = jdbc.query("""
+                SELECT Id FROM plat.MetaVersion WHERE TenantId = ? AND Scope = ? AND Version = ?
+                """, rs -> rs.next() ? rs.getLong(1) : null, tenantId, SCOPE, version);
+        if (versionId == null) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "版本不存在：" + version);
+        }
+        List<Long> ids = jdbc.queryForList(
+                "SELECT UserId FROM plat.MetaVersionGray WHERE MetaVersionId = ? ORDER BY Id",
+                Long.class, versionId);
+        List<String> names = jdbc.queryForList("""
+                SELECT ISNULL(u.DisplayName, u.UserName)
+                FROM plat.MetaVersionGray g LEFT JOIN plat.[User] u ON u.Id = g.UserId
+                WHERE g.MetaVersionId = ? ORDER BY g.Id
+                """, String.class, versionId);
+        return new GrayDto(version, ids, names);
+    }
+
+    /** 当前生效版本号（没有则 null）。 */
+    public Integer currentVersion() {
+        long tenantId = TenantContext.requireTenantId();
+        return jdbc.query("""
+                SELECT TOP 1 Version FROM plat.MetaVersion
+                WHERE TenantId = ? AND Scope = ? AND Status = 1 ORDER BY Version DESC
+                """, rs -> rs.next() ? rs.getInt(1) : null, tenantId, SCOPE);
+    }
+
+    /**
+     * 激活某个历史版本：全量生效，或只对灰度名单生效。
+     *
+     * @param userIds 空=全量；非空=只对这些用户灰度
+     */
+    public PublishResult activate(int version, List<Long> userIds, String remark) {
+        long tenantId = TenantContext.requireTenantId();
+        Integer exists = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.MetaVersion WHERE TenantId = ? AND Scope = ? AND Version = ?
+                """, Integer.class, tenantId, SCOPE, version);
+        if (exists == null || exists == 0) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "版本不存在：" + version);
+        }
+        boolean gray = userIds != null && !userIds.isEmpty();
+        if (gray) {
+            jdbc.update("DELETE g FROM plat.MetaVersionGray g JOIN plat.MetaVersion v ON v.Id = g.MetaVersionId "
+                    + "WHERE v.TenantId = ? AND v.Scope = ? AND v.Version = ?", tenantId, SCOPE, version);
+            saveGray(tenantId, version, userIds);
+            jdbc.update("""
+                    UPDATE plat.MetaVersion SET Status = 2, Remark = ISNULL(?, Remark)
+                    WHERE TenantId = ? AND Scope = ? AND Version = ?
+                    """, remark, tenantId, SCOPE, version);
+        } else {
+            jdbc.update("UPDATE plat.MetaVersion SET Status = 0 WHERE TenantId = ? AND Scope = ?",
+                    tenantId, SCOPE);
+            jdbc.update("""
+                    UPDATE plat.MetaVersion SET Status = 1, Remark = ISNULL(?, Remark)
+                    WHERE TenantId = ? AND Scope = ? AND Version = ?
+                    """, remark, tenantId, SCOPE, version);
+            jdbc.update("DELETE g FROM plat.MetaVersionGray g JOIN plat.MetaVersion v ON v.Id = g.MetaVersionId "
+                    + "WHERE v.TenantId = ? AND v.Scope = ?", tenantId, SCOPE);
+        }
+        cache.invalidateTenant();
+        log.info("meta_activate tenant={} version={} gray={}", tenantId, version, gray);
+        return new PublishResult(version, "", 0);
     }
 
     public List<VersionDto> versions() {
@@ -145,6 +254,8 @@ public class MetaPublishService {
                 VALUES (?, ?, ?, ?, ?, ?, sysutcdatetime(), ?, 1, ?)
                 """, tenantId, newVersion, SCOPE, hash, payload, TenantContext.userId(), version,
                 remark == null ? ("回滚到 v" + version) : remark);
+        cache.invalidateTenant();
+        log.info("meta_rollback tenant={} to={} newVersion={}", tenantId, version, newVersion);
         return new PublishResult(newVersion, hash, payload.getBytes(StandardCharsets.UTF_8).length);
     }
 
@@ -679,3 +790,4 @@ public class MetaPublishService {
         }
     }
 }
+

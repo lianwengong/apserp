@@ -22,10 +22,13 @@ public class MetaDefinitionService {
 
     private final JdbcTemplate jdbc;
     private final PermissionService permissionService;
+    private final MetaCache cache;
 
-    public MetaDefinitionService(JdbcTemplate jdbc, PermissionService permissionService) {
+    public MetaDefinitionService(JdbcTemplate jdbc, PermissionService permissionService,
+                                 MetaCache cache) {
         this.jdbc = jdbc;
         this.permissionService = permissionService;
+        this.cache = cache;
     }
 
     // ---------------------------------------------------------------- DTO
@@ -62,6 +65,10 @@ public class MetaDefinitionService {
     // ---------------------------------------------------------------- 查询
 
     public List<DataObjectDto> listObjects() {
+        return cache.get("objects", "-", this::loadObjects);
+    }
+
+    private List<DataObjectDto> loadObjects() {
         long tenantId = TenantContext.requireTenantId();
         return jdbc.query("""
                         SELECT Id, Code, Name, ObjectType, SchemaName, ObjectName, PrimaryKey,
@@ -105,6 +112,10 @@ public class MetaDefinitionService {
      * Access=1 的字段标记为只读（前端渲染时应据此禁用输入）。
      */
     public List<FieldDto> listFields(String objectCode) {
+        return cache.get("fields", objectCode, () -> loadFields(objectCode));
+    }
+
+    private List<FieldDto> loadFields(String objectCode) {
         DataObjectDto obj = getObject(objectCode);
         Map<String, Integer> access = permissionService.fieldAccess(objectCode);
         List<FieldDto> raw = jdbc.query("""
@@ -134,6 +145,10 @@ public class MetaDefinitionService {
     }
 
     public List<ListViewDto> listViews(String objectCode) {
+        return cache.get("views", objectCode, () -> loadViews(objectCode));
+    }
+
+    private List<ListViewDto> loadViews(String objectCode) {
         DataObjectDto obj = getObject(objectCode);
         List<ListViewDto> heads = jdbc.query("""
                         SELECT Id, Code, Name, PageSize, DefaultSort, IsDefault
@@ -165,6 +180,10 @@ public class MetaDefinitionService {
     }
 
     public List<FormLayoutDto> listFormLayouts(String objectCode) {
+        return cache.get("forms", objectCode, () -> loadFormLayouts(objectCode));
+    }
+
+    private List<FormLayoutDto> loadFormLayouts(String objectCode) {
         DataObjectDto obj = getObject(objectCode);
         List<FormLayoutDto> heads = jdbc.query("""
                         SELECT Id, Code, Name, Mode, Columns, IsDefault
