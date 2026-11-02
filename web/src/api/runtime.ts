@@ -4,6 +4,14 @@ export const runtimeApi = {
   children: (objectCode: string, id: number) =>
     request<ChildGroup[]>(`/api/runtime/children${queryString({ objectCode, id })}`),
 
+  docStatusDefine: (objectCode: string) =>
+    request<DocStatusDefine[]>(
+      `/api/runtime/doc-status/define${queryString({ objectCode })}`
+    ),
+
+  docStatus: (objectCode: string, id: number) =>
+    request<DocStatusCapability>(`/api/runtime/doc-status${queryString({ objectCode, id })}`),
+
   metaVersion: () =>
     request<{ version: number; gray: boolean }>('/api/runtime/meta-version'),
 
@@ -87,6 +95,47 @@ export interface ExecuteResult {
   downloadUrl: string | null
   data: Record<string, unknown>
   refresh: boolean
+}
+
+export interface DocStatusDefine {
+  id: number
+  objectCode: string
+  statusValue: number
+  statusName: string
+  sort: number
+  canEdit: boolean
+  canDelete: boolean
+  canSubmit: boolean
+  isFinal: boolean
+  colorType: string | null
+  enabled: boolean
+}
+
+export interface DocTransition {
+  id: number
+  objectCode: string
+  fromStatus: number
+  fromStatusName: string
+  toStatus: number
+  toStatusName: string
+  actionCode: string
+  actionName: string
+  sort: number
+  enabled: boolean
+}
+
+export interface DocStatusCapability {
+  objectCode: string
+  statusField: string | null
+  statusValue: number
+  statusName: string | null
+  colorType: string | null
+  configured: boolean
+  canEdit: boolean
+  canDelete: boolean
+  canSubmit: boolean
+  isFinal: boolean
+  transitions: DocTransition[]
 }
 
 export interface ChildGroup {

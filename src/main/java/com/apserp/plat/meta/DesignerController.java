@@ -62,11 +62,13 @@ public class DesignerController {
     private final PermissionDesignService permissionDesign;
     private final MetaChildService childService;
     private final MetaCache metaCache;
+    private final DocStatusService docStatusService;
 
     public DesignerController(RuleService ruleService, ActionService actionService,
                               ApprovalService approvalService, MetaPublishService publishService,
                               PermissionDesignService permissionDesign,
-                              MetaChildService childService, MetaCache metaCache) {
+                              MetaChildService childService, MetaCache metaCache,
+                              DocStatusService docStatusService) {
         this.ruleService = ruleService;
         this.actionService = actionService;
         this.approvalService = approvalService;
@@ -74,6 +76,7 @@ public class DesignerController {
         this.permissionDesign = permissionDesign;
         this.childService = childService;
         this.metaCache = metaCache;
+        this.docStatusService = docStatusService;
     }
 
     // ---------------------------------------------------------------- 概览
@@ -82,6 +85,52 @@ public class DesignerController {
     @RequiresPermission(value = "DESIGN:publish", action = "read")
     public ApiResult<Map<String, Object>> overview() {
         return ApiResult.ok(permissionDesign.overview());
+    }
+
+    // ---------------------------------------------------------------- 状态机
+
+    @GetMapping("/doc-status")
+    @RequiresPermission(value = "DESIGN:page", action = "read")
+    public ApiResult<Map<String, Object>> docStatusOverview(@RequestParam(required = false) String objectCode) {
+        if (objectCode == null || objectCode.isBlank()) {
+            return ApiResult.ok(Map.of("objects", docStatusService.overview()));
+        }
+        return ApiResult.ok(Map.of(
+                "statuses", docStatusService.statusesOf(objectCode),
+                "transitions", docStatusService.transitionsOf(objectCode)));
+    }
+
+    @PostMapping("/doc-status")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Map<String, Long>> saveDocStatus(@RequestBody DocStatusService.StatusSaveRequest body) {
+        return ApiResult.ok(Map.of("id", docStatusService.saveStatus(body)));
+    }
+
+    @DeleteMapping("/doc-status/{id}")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Void> deleteDocStatus(@PathVariable long id) {
+        docStatusService.deleteStatus(id);
+        return ApiResult.ok(null);
+    }
+
+    @PostMapping("/doc-status/transitions")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Map<String, Long>> saveDocTransition(
+            @RequestBody DocStatusService.TransitionSaveRequest body) {
+        return ApiResult.ok(Map.of("id", docStatusService.saveTransition(body)));
+    }
+
+    @DeleteMapping("/doc-status/transitions/{id}")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<Void> deleteDocTransition(@PathVariable long id) {
+        docStatusService.deleteTransition(id);
+        return ApiResult.ok(null);
+    }
+
+    @PostMapping("/doc-status/init")
+    @RequiresPermission(value = "DESIGN:page", action = "write")
+    public ApiResult<List<DocStatusService.StatusDto>> initDocStatus(@RequestBody Map<String, String> body) {
+        return ApiResult.ok(docStatusService.initDefault(body.get("objectCode")));
     }
 
     // ---------------------------------------------------------------- 子表关系

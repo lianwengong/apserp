@@ -139,7 +139,7 @@ public class MetaOverlay {
                     num(o.get("Id")), str(o.get("Code")), str(o.get("Name")), (int) num(o.get("ObjectType")),
                     str(o.get("SchemaName")), str(o.get("ObjectName")), str(o.get("PrimaryKey")),
                     str(o.get("DocNoField")), str(o.get("TenantField")), str(o.get("DefaultOrder")),
-                    bool(o.get("IsReadOnly"))));
+                    bool(o.get("IsReadOnly")), str(o.get("StatusField")), str(o.get("OrgField"))));
         }
         return out;
     }

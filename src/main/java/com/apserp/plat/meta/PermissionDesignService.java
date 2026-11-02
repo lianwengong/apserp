@@ -186,6 +186,8 @@ public class PermissionDesignService {
         m.put("pages", count("SELECT COUNT(*) FROM plat.Page WHERE TenantId = ? AND IsDeleted = 0", tenantId));
         m.put("roles", count("SELECT COUNT(*) FROM plat.Role WHERE TenantId = ? AND IsDeleted = 0", tenantId));
         m.put("versions", count("SELECT COUNT(*) FROM plat.MetaVersion WHERE TenantId = ?", tenantId));
+        m.put("relations", count("SELECT COUNT(*) FROM plat.DataObjectRelation WHERE TenantId = ? AND IsDeleted = 0", tenantId));
+        m.put("docStatuses", count("SELECT COUNT(*) FROM plat.DocStatus WHERE TenantId = ? AND IsDeleted = 0", tenantId));
         m.put("pendingTasks", count("SELECT COUNT(*) FROM plat.WorkflowTask t JOIN plat.WorkflowInstance i "
                 + "ON i.Id = t.InstanceId WHERE i.TenantId = ? AND t.ApproveStatus = 0", tenantId));
         return m;

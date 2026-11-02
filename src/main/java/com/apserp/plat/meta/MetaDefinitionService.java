@@ -38,7 +38,7 @@ public class MetaDefinitionService {
     public record DataObjectDto(long id, String code, String name, int objectType,
                                 String schemaName, String objectName, String primaryKey,
                                 String docNoField, String tenantField, String defaultOrder,
-                                boolean readOnly) {
+                                boolean readOnly, String statusField, String orgField) {
     }
 
     public record FieldDto(String fieldName, String displayName, String dataType, Integer maxLength,
@@ -79,7 +79,7 @@ public class MetaDefinitionService {
         long tenantId = TenantContext.requireTenantId();
         return jdbc.query("""
                         SELECT Id, Code, Name, ObjectType, SchemaName, ObjectName, PrimaryKey,
-                               DocNoField, TenantField, DefaultOrder, IsReadOnly
+                               DocNoField, TenantField, DefaultOrder, IsReadOnly, StatusField, OrgField
                         FROM plat.DataObject
                         WHERE TenantId = ? AND IsDeleted = 0 AND IsEnabled = 1
                         ORDER BY Code
@@ -88,7 +88,8 @@ public class MetaDefinitionService {
                         rs.getString("Name"), rs.getInt("ObjectType"), rs.getString("SchemaName"),
                         rs.getString("ObjectName"), rs.getString("PrimaryKey"),
                         rs.getString("DocNoField"), rs.getString("TenantField"),
-                        rs.getString("DefaultOrder"), rs.getBoolean("IsReadOnly")),
+                        rs.getString("DefaultOrder"), rs.getBoolean("IsReadOnly"),
+                        rs.getString("StatusField"), rs.getString("OrgField")),
                 tenantId);
     }
 
@@ -97,7 +98,7 @@ public class MetaDefinitionService {
         long tenantId = TenantContext.requireTenantId();
         List<DataObjectDto> hit = jdbc.query("""
                         SELECT Id, Code, Name, ObjectType, SchemaName, ObjectName, PrimaryKey,
-                               DocNoField, TenantField, DefaultOrder, IsReadOnly
+                               DocNoField, TenantField, DefaultOrder, IsReadOnly, StatusField, OrgField
                         FROM plat.DataObject
                         WHERE TenantId = ? AND Code = ? AND IsDeleted = 0
                         """,
@@ -105,7 +106,8 @@ public class MetaDefinitionService {
                         rs.getString("Name"), rs.getInt("ObjectType"), rs.getString("SchemaName"),
                         rs.getString("ObjectName"), rs.getString("PrimaryKey"),
                         rs.getString("DocNoField"), rs.getString("TenantField"),
-                        rs.getString("DefaultOrder"), rs.getBoolean("IsReadOnly")),
+                        rs.getString("DefaultOrder"), rs.getBoolean("IsReadOnly"),
+                        rs.getString("StatusField"), rs.getString("OrgField")),
                 tenantId, objectCode);
         if (hit.isEmpty()) {
             throw new ApiException(ErrorCode.META_OBJECT_NOT_FOUND,

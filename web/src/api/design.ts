@@ -4,6 +4,32 @@ import { request, queryString } from './http'
 export const designApi = {
   overview: () => request<Record<string, number>>('/api/design/overview'),
 
+  // ---------------- 状态机
+  docStatusOverview: () =>
+    request<{
+      objects: {
+        objectCode: string
+        objectName: string
+        statusField: string | null
+        statusCount: number
+        transitionCount: number
+      }[]
+    }>('/api/design/doc-status'),
+  docStatusDetail: (objectCode: string) =>
+    request<{ statuses: StatusRow[]; transitions: TransitionRow[] }>(
+      `/api/design/doc-status${queryString({ objectCode })}`
+    ),
+  saveDocStatus: (body: StatusRow) =>
+    request<{ id: number }>('/api/design/doc-status', { method: 'POST', body }),
+  deleteDocStatus: (id: number) =>
+    request<void>(`/api/design/doc-status/${id}`, { method: 'DELETE' }),
+  saveDocTransition: (body: TransitionRow) =>
+    request<{ id: number }>('/api/design/doc-status/transitions', { method: 'POST', body }),
+  deleteDocTransition: (id: number) =>
+    request<void>(`/api/design/doc-status/transitions/${id}`, { method: 'DELETE' }),
+  initDocStatus: (objectCode: string) =>
+    request<StatusRow[]>('/api/design/doc-status/init', { method: 'POST', body: { objectCode } }),
+
   // ---------------- 子表关系
   relations: (objectCode?: string) =>
     request<RelationDto[]>(`/api/design/relations${queryString({ objectCode })}`),
@@ -313,6 +339,33 @@ export interface DiffResult {
   fromVersion: number | null
   toVersion: number | null
   items: { kind: string; action: string; code: string }[]
+}
+
+export interface StatusRow {
+  id: number
+  objectCode: string
+  statusValue: number
+  statusName: string
+  sort: number
+  canEdit: boolean
+  canDelete: boolean
+  canSubmit: boolean
+  isFinal: boolean
+  colorType: string | null
+  enabled: boolean
+}
+
+export interface TransitionRow {
+  id: number
+  objectCode: string
+  fromStatus: number
+  fromStatusName: string
+  toStatus: number
+  toStatusName: string
+  actionCode: string
+  actionName: string
+  sort: number
+  enabled: boolean
 }
 
 export interface RelationDto {

@@ -41,6 +41,9 @@ export interface DataObjectDto {
   tenantField: string | null
   defaultOrder: string | null
   readOnly: boolean
+  /** 状态字段名：非空表示该对象受单据状态机约束 */
+  statusField: string | null
+  orgField: string | null
 }
 
 export interface FieldDto {

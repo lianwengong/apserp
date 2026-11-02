@@ -74,9 +74,11 @@ public class ApprovalService {
     private static final Map<Integer, String> MODE_NAME = Map.of(1, "或签", 2, "会签", 3, "顺签");
 
     private final JdbcTemplate jdbc;
+    private final DocStatusService docStatus;
 
-    public ApprovalService(JdbcTemplate jdbc) {
+    public ApprovalService(JdbcTemplate jdbc, DocStatusService docStatus) {
         this.jdbc = jdbc;
+        this.docStatus = docStatus;
     }
 
     // ============================================================ DTO
@@ -389,6 +391,8 @@ public class ApprovalService {
     public long submit(String objectCode, long businessId, String businessNo, String title) {
         long tenantId = TenantContext.requireTenantId();
         Long userId = TenantContext.userId();
+        // 状态机：先给用户一句人话（「审批中不能提交」），再接流程校验
+        docStatus.guardSubmit(objectCode, businessId);
         Map<String, Object> data = businessData(objectCode, businessId);
         Map<String, Object> ctx = new LinkedHashMap<>(data);
 
@@ -405,6 +409,8 @@ public class ApprovalService {
                 SELECT MAX(Id) FROM plat.WorkflowInstance WHERE TenantId = ? AND DataObjectCode = ?
                 """, Long.class, tenantId, objectCode);
         log(instanceId, null, "SUBMIT", null);
+        // 状态机：提交审批 → 单据进入「审批中」；没配状态机的对象返回 null，不影响流程
+        docStatus.transition(objectCode, businessId, "SUBMIT");
         moveToFirstNode(instanceId, def, ctx, userId);
         return instanceId;
     }
@@ -491,6 +497,8 @@ public class ApprovalService {
 
         if (!approved) {
             closeInstance(inst.id, INST_REJECTED);
+            // 状态机：审批驳回 → 单据回到「已驳回」，可以改完再提交
+            docStatus.onRejected(inst.objectCode, inst.businessId);
             return;
         }
         boolean nodeDone = nodeDone(inst.id, node);
@@ -527,6 +535,8 @@ public class ApprovalService {
         NodeRow next = resolveNext(nodes, node, ctx);
         if (next == null) {
             closeInstance(inst.id, INST_APPROVED);
+            // 状态机：审批通过 → 单据进入终态（如「已审核」）
+            docStatus.onApproved(inst.objectCode, inst.businessId);
             notifyBusiness(inst, INST_APPROVED);
             return;
         }
@@ -647,6 +657,11 @@ public class ApprovalService {
                 + "WHERE InstanceId = ? AND ApproveStatus = 0", TASK_SKIPPED, instanceId);
         log(instanceId, null, "WITHDRAW", opinion);
         closeInstance(instanceId, INST_WITHDRAWN);
+        // 状态机：撤回 → 回到可编辑状态
+        InstanceRow withdrawn = loadInstance(tenantId, instanceId);
+        if (withdrawn != null) {
+            docStatus.onWithdrawn(withdrawn.objectCode, withdrawn.businessId);
+        }
     }
 
     // ============================================================ 运行时：查询

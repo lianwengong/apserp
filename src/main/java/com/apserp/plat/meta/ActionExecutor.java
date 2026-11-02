@@ -35,6 +35,7 @@ public class ActionExecutor {
     private final MetaSaveProc saveProc;
     private final ApprovalService approvalService;
     private final PermissionService permissionService;
+    private final DocStatusService docStatus;
 
     /** 服务端命令注册表：命令名 → 实现。命令名同时是脚本动作的白名单键。 */
     private final Map<String, Command> commands = new LinkedHashMap<>();
@@ -42,7 +43,7 @@ public class ActionExecutor {
     public ActionExecutor(JdbcTemplate jdbc, ActionService actionService,
                           MetaDefinitionService definitionService, MetaQueryService queryService,
                           MetaSaveProc saveProc, ApprovalService approvalService,
-                          PermissionService permissionService) {
+                          PermissionService permissionService, DocStatusService docStatus) {
         this.jdbc = jdbc;
         this.actionService = actionService;
         this.definitionService = definitionService;
@@ -50,6 +51,7 @@ public class ActionExecutor {
         this.saveProc = saveProc;
         this.approvalService = approvalService;
         this.permissionService = permissionService;
+        this.docStatus = docStatus;
 
         commands.put("export.csv", this::commandExportCsv);
         commands.put("copy.record", this::commandCopyRecord);
@@ -178,6 +180,8 @@ public class ActionExecutor {
         if (!permissionService.check("DATA:" + req.objectCode(), "delete")) {
             throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的删除权限：" + req.objectCode());
         }
+        // 状态机：终态/审批中的单据不允许删除
+        docStatus.guardDelete(req.objectCode(), req.id());
         var object = definitionService.getObject(req.objectCode());
         String table = "[" + object.schemaName() + "].[" + object.objectName() + "]";
         int n;
@@ -292,6 +296,8 @@ public class ActionExecutor {
         if (!permissionService.check("DATA:" + objectCode, "write")) {
             throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的写入权限：" + objectCode);
         }
+        // 状态机：只有允许提交的状态才能发起审批
+        docStatus.guardSubmit(objectCode, id);
         String businessNo = params.get("businessNo") == null ? null
                 : String.valueOf(params.get("businessNo"));
         String title = params.get("title") == null ? null : String.valueOf(params.get("title"));

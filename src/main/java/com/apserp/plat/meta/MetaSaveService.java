@@ -29,18 +29,20 @@ public class MetaSaveService {
     private final MetaDefinitionService definitionService;
     private final RuleService ruleService;
     private final MetaChildService childService;
+    private final DocStatusService docStatus;
     private final MetaSaveProc saveProc;
     private final com.fasterxml.jackson.databind.ObjectMapper jsonMapper =
             new com.fasterxml.jackson.databind.ObjectMapper();
 
     public MetaSaveService(JdbcTemplate jdbc, MetaDefinitionService definitionService,
                            RuleService ruleService, MetaChildService childService,
-                           MetaSaveProc saveProc) {
+                           MetaSaveProc saveProc, DocStatusService docStatus) {
         this.jdbc = jdbc;
         this.definitionService = definitionService;
         this.ruleService = ruleService;
         this.childService = childService;
         this.saveProc = saveProc;
+        this.docStatus = docStatus;
     }
 
     /**
@@ -62,6 +64,8 @@ public class MetaSaveService {
         var data = parseData(json);
         ruleService.checkBeforeSave(objectCode, data);
         assertNotStale(objectCode, json);
+        // 状态机：单据处于「不允许编辑」的状态时直接拒绝（新增不受限）
+        docStatus.guardEdit(objectCode, readLong(json, "Id"));
         try {
             long id = jdbc.execute((ConnectionCallback<Long>) con ->
                     saveProc.call(con, tenantId, userId, objectCode, json));

@@ -25,6 +25,7 @@ import CellValue from '../components/CellValue.vue'
 import MetaFormDialog from '../components/MetaFormDialog.vue'
 import ActionBar from '../components/ActionBar.vue'
 import ApprovalPanel from '../components/ApprovalPanel.vue'
+import { runtimeApi, type DocStatusDefine } from '../api/runtime'
 
 type ViewState = 'loading' | 'ready' | 'denied' | 'missing' | 'error'
 
@@ -74,6 +75,8 @@ const visibleMap = reactive<Record<string, boolean>>({})
 const tableKey = ref(0)
 const dialogVisible = ref(false)
 const editingRow = ref<Row | null>(null)
+/** 状态机定义：状态值 → 中文名/颜色（列表里把 Status 渲染成标签） */
+const statusDefs = ref<DocStatusDefine[]>([])
 
 let keywordCondition: FilterCondition | null = null
 let requestId = 0
@@ -205,6 +208,10 @@ async function bootstrap(): Promise<void> {
     fields.value = fieldList
     views.value = viewList
     forms.value = formList
+    // 状态机定义：拿不到不影响列表（老对象没有状态机）
+    statusDefs.value = objectDto.statusField
+      ? await runtimeApi.docStatusDefine(objectCode).catch(() => [] as DocStatusDefine[])
+      : []
 
     // 字段级权限不影响列表主流程：拿不到就按“全部可写”降级，服务端仍会兜底
     access.value = await fieldAccess(objectCode).catch(() => ({}) as FieldAccess)
@@ -509,6 +516,20 @@ function onSaved(): void {
   void catalog.load(true)
 }
 
+/** 状态标签颜色：优先用元数据里的 ColorType，缺失时按终态判断 */
+function statusTagType(raw: unknown): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+  const def = statusDefs.value.find((s) => s.statusValue === Number(raw))
+  if (!def) return 'info'
+  const color = (def.colorType ?? '').toLowerCase()
+  if (color === 'success' || color === 'warning' || color === 'danger' || color === 'info') return color
+  return def.isFinal ? 'success' : 'primary'
+}
+
+function statusNameOf(raw: unknown): string {
+  const def = statusDefs.value.find((s) => s.statusValue === Number(raw))
+  return def ? def.statusName : String(raw ?? '')
+}
+
 function backHome(): void {
   void router.push('/')
 }
@@ -727,7 +748,16 @@ function retry(): void {
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              <CellValue :value="row[column.fieldName]" :field="fieldOfName(column.fieldName)" />
+              <!-- 状态字段渲染成标签：颜色与中文名来自状态机元数据 -->
+              <el-tag
+                v-if="object?.statusField === column.fieldName"
+                size="small"
+                :type="statusTagType(row[column.fieldName])"
+                effect="plain"
+              >
+                {{ statusNameOf(row[column.fieldName]) }}
+              </el-tag>
+              <CellValue v-else :value="row[column.fieldName]" :field="fieldOfName(column.fieldName)" />
             </template>
           </el-table-column>
 

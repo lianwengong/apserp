@@ -280,7 +280,8 @@ public class MetaPublishService {
     private DiffResult diff(Map<String, Object> a, Map<String, Object> b, Integer from, Integer to) {
         List<DiffItem> items = new ArrayList<>();
         for (String kind : List.of("objects", "fields", "listViews", "listViewColumns", "formLayouts",
-                "formFields", "relations", "buttons", "buttonActions", "rules", "ruleBindings",
+                "formFields", "relations", "docStatuses", "docTransitions", "buttons", "buttonActions",
+                "rules", "ruleBindings",
                 "workflows", "workflowNodes", "workflowApprovers", "rolePermissions", "fieldPermissions")) {
             Map<String, String> left = flatten((List<Map<String, Object>>) a.getOrDefault(kind, List.of()));
             Map<String, String> right = flatten((List<Map<String, Object>>) b.getOrDefault(kind, List.of()));
@@ -411,6 +412,19 @@ public class MetaPublishService {
                         + "JOIN plat.DataObject ch ON ch.Id = r.ChildObjectId WHERE r." + t
                         + " AND r.IsDeleted = 0 ORDER BY p.Code, r.Sort");
 
+        List<Map<String, Object>> docStatuses = jdbc.queryForList(
+                "SELECT o.Code AS ObjectCode, s.StatusValue, s.StatusName, s.Sort, s.CanEdit, s.CanDelete, "
+                        + "s.CanSubmit, s.IsFinal, s.ColorType, s.IsEnabled FROM plat.DocStatus s "
+                        + "JOIN plat.DataObject o ON o.Id = s.DataObjectId WHERE s." + t
+                        + " AND s.IsDeleted = 0 ORDER BY o.Code, s.Sort");
+        List<Map<String, Object>> docTransitions = jdbc.queryForList(
+                "SELECT o.Code AS ObjectCode, tr.FromStatus, tr.ToStatus, tr.ActionCode, tr.ActionName, "
+                        + "tr.Sort, tr.IsEnabled FROM plat.DocTransition tr "
+                        + "JOIN plat.DataObject o ON o.Id = tr.DataObjectId WHERE tr." + t
+                        + " AND tr.IsDeleted = 0 ORDER BY o.Code, tr.FromStatus, tr.Sort");
+
+        s.put("docStatuses", docStatuses);
+        s.put("docTransitions", docTransitions);
         s.put("relations", relations);
         s.put("objects", objects);
         s.put("fields", fields);
@@ -460,8 +474,12 @@ public class MetaPublishService {
         jdbc.update("DELETE FROM plat.ListViewColumn WHERE ListViewId IN "
                 + "(SELECT Id FROM plat.ListView WHERE TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.ListView WHERE TenantId = ?", tenantId);
-        // 关系表外键指向 DataObject：必须先删关系再删对象，否则外键冲突
+        // 关系表、状态机表的外键都指向 DataObject：先删子表再删对象，否则外键冲突
         jdbc.update("DELETE FROM plat.DataObjectRelation WHERE TenantId = ?", tenantId);
+        jdbc.update("DELETE FROM plat.DocTransition WHERE DataObjectId IN "
+                + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
+        jdbc.update("DELETE FROM plat.DocStatus WHERE DataObjectId IN "
+                + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
         jdbc.update("DELETE FROM plat.DataObjectField WHERE DataObjectId IN "
                 + "(SELECT Id FROM plat.DataObject WHERE TenantId = ?)", tenantId);
         // 数据对象本身也要清掉后按快照重建（保留原 Id 会与其它租户冲突，这里整体重建）
@@ -573,6 +591,35 @@ public class MetaPublishService {
                     """, tenantId, parentId, childId, rel.get("ChildAlias"), rel.get("ForeignKeyField"),
                     rel.get("DisplayName"), num(rel.get("Sort")), num(rel.get("CascadeDelete")),
                     num(rel.get("MaxRows")), bool(rel.get("IsEnabled")));
+        }
+        // 状态机：状态定义与流转（外键指向 DataObject，必须在对象重建之后插回）
+        for (Map<String, Object> st : (List<Map<String, Object>>) s.getOrDefault("docStatuses", List.of())) {
+            Long objId = objectIds.get(String.valueOf(st.get("ObjectCode")));
+            if (objId == null) {
+                continue;
+            }
+            jdbc.update("""
+                    INSERT plat.DocStatus (TenantId, DataObjectId, StatusValue, StatusName, Sort, CanEdit,
+                                           CanDelete, CanSubmit, IsFinal, ColorType, IsEnabled,
+                                           IsDeleted, CreatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, sysutcdatetime())
+                    """, tenantId, objId, num(st.get("StatusValue")), st.get("StatusName"),
+                    num(st.get("Sort")), bool(st.get("CanEdit")), bool(st.get("CanDelete")),
+                    bool(st.get("CanSubmit")), bool(st.get("IsFinal")), st.get("ColorType"),
+                    bool(st.get("IsEnabled")));
+        }
+        for (Map<String, Object> tr : (List<Map<String, Object>>) s.getOrDefault("docTransitions", List.of())) {
+            Long objId = objectIds.get(String.valueOf(tr.get("ObjectCode")));
+            if (objId == null) {
+                continue;
+            }
+            jdbc.update("""
+                    INSERT plat.DocTransition (TenantId, DataObjectId, FromStatus, ToStatus, ActionCode,
+                                              ActionName, Sort, IsEnabled, IsDeleted, CreatedAt)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, sysutcdatetime())
+                    """, tenantId, objId, num(tr.get("FromStatus")), num(tr.get("ToStatus")),
+                    tr.get("ActionCode"), tr.get("ActionName"), num(tr.get("Sort")),
+                    bool(tr.get("IsEnabled")));
         }
         for (Map<String, Object> b : (List<Map<String, Object>>) s.getOrDefault("buttons", List.of())) {
             jdbc.update("""

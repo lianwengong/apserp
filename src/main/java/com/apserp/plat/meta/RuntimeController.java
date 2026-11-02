@@ -43,13 +43,15 @@ public class RuntimeController {
     private final MetaChildService childService;
     private final ActionExecutor actionExecutor;
     private final MetaOverlay metaOverlay;
+    private final DocStatusService docStatusService;
     private final MetaPublishService publishService;
     private final PermissionService permissionService;
 
     public RuntimeController(ActionService actionService, ApprovalService approvalService,
                              MetaQueryService queryService, MetaChildService childService,
                              ActionExecutor actionExecutor, MetaOverlay metaOverlay,
-                             MetaPublishService publishService, PermissionService permissionService) {
+                             MetaPublishService publishService, DocStatusService docStatusService,
+                             PermissionService permissionService) {
         this.actionService = actionService;
         this.approvalService = approvalService;
         this.queryService = queryService;
@@ -57,6 +59,7 @@ public class RuntimeController {
         this.actionExecutor = actionExecutor;
         this.metaOverlay = metaOverlay;
         this.publishService = publishService;
+        this.docStatusService = docStatusService;
         this.permissionService = permissionService;
     }
 
@@ -152,6 +155,24 @@ public class RuntimeController {
                 .header("Content-Type", "text/csv; charset=UTF-8")
                 .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
                 .body(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    // ---------------------------------------------------------------- 状态机
+
+    /** 某条单据当前状态与可用动作（前端据此置灰按钮）。 */
+    @GetMapping("/doc-status")
+    public ApiResult<DocStatusService.StatusCapability> docStatus(@RequestParam String objectCode,
+                                                                 @RequestParam long id) {
+        if (!permissionService.check("DATA:" + objectCode, "read")) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "没有该对象的读取权限：" + objectCode);
+        }
+        return ApiResult.ok(docStatusService.capabilityOf(objectCode, id));
+    }
+
+    /** 状态定义（列表页渲染状态标签用）。 */
+    @GetMapping("/doc-status/define")
+    public ApiResult<List<DocStatusService.StatusDto>> docStatusDefine(@RequestParam String objectCode) {
+        return ApiResult.ok(docStatusService.statusesOf(objectCode));
     }
 
     // ---------------------------------------------------------------- 元数据版本
