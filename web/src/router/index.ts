@@ -126,7 +126,7 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   const title = to.meta.title
-  document.title = title ? `${title} · APS ERP` : 'APS ERP · 进销存'
+  document.title = title ? `${title} · 阿申商链` : '阿申商链 · 商贸供应链管理系统'
 })
 
 export default router

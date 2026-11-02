@@ -59,7 +59,7 @@ async function submit(): Promise<void> {
   <div class="login">
     <section class="brand-panel">
       <div class="brand-row">
-        <span class="logo">APS</span>
+        <span class="logo">AS</span>
         <span class="brand-name">阿申商链</span>
       </div>
 

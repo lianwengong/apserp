@@ -376,9 +376,9 @@ function onUserCommand(command: string): void {
       :class="{ 'is-collapsed': collapsed }"
     >
       <div class="brand">
-        <div class="logo">APS</div>
+        <div class="logo">AS</div>
         <div v-if="!collapsed" class="brand-text">
-          <strong>APS ERP</strong>
+          <strong>阿申商链</strong>
           <span>进销存 V3 · 引擎驱动</span>
         </div>
       </div>

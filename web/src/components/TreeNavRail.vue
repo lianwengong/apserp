@@ -38,7 +38,7 @@ function isGroupActive(group: TreeNavGroup): boolean {
 
 <template>
   <div class="tree-nav">
-    <div class="tree-brand">APS</div>
+    <div class="tree-brand">AS</div>
     <el-popover
       v-for="group in groups"
       :key="group.key"

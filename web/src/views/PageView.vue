@@ -51,7 +51,7 @@ watch(
   schema,
   (page) => {
     if (!page) return
-    document.title = `${page.title} · APS ERP`
+    document.title = `${page.title} · 阿申商链`
     // 页签在路由 afterEach 里先建好；等 DOM 更新后再改标题，避免被占位名覆盖。
     void nextTick(() => tabsStore.setTitle(route.path, page.title))
   },
