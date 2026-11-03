@@ -16,11 +16,11 @@ jobs:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
           ACCEPT_EULA: "Y"
-          MSSQL_SA_PASSWORD: "Apserp#2026Ci"
+          MSSQL_SA_PASSWORD: "AsChain#2026Ci"
         ports:
           - 1433:1433
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'Apserp#2026Ci' -C -Q 'SELECT 1' || exit 1"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'AsChain#2026Ci' -C -Q 'SELECT 1' || exit 1"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 20
@@ -28,7 +28,7 @@ jobs:
       IT_ENABLED: "true"
       IT_DB_URL: "jdbc:sqlserver://localhost:1433;databaseName=ASChain_TEST;encrypt=false;trustServerCertificate=true"
       IT_DB_USER: "sa"
-      IT_DB_PASSWORD: "Apserp#2026Ci"
+      IT_DB_PASSWORD: "AsChain#2026Ci"
     steps:
       - uses: actions/checkout@v4
 

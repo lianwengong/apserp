@@ -1,10 +1,10 @@
 ﻿# 本地准备 CI 用的测试库（只在本地跑；CI 由 service 容器 + CiDbInit 负责）
-# 前置：以 Windows 身份（sysadmin）能连本机 SQL Server；应用账号 apserp_dev 已存在。
+# 前置：以 Windows 身份（sysadmin）能连本机 SQL Server；应用账号 aschain_dev 已存在。
 # 注意：本文件必须保存为 UTF-8 with BOM，否则 Windows PowerShell 5.1 按 GBK 解析会报错。
 param(
     [string]$Server = '.',
-    [string]$TestDb = 'APSErpV3_TEST',
-    [string]$AppUser = 'apserp_dev',
+    [string]$TestDb = 'ASChain_TEST',
+    [string]$AppUser = 'aschain_dev',
     [switch]$Drop
 )
 $ErrorActionPreference = 'Stop'

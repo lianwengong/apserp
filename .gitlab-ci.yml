@@ -38,12 +38,12 @@ test:
       alias: mssql
   variables:
     ACCEPT_EULA: "Y"
-    MSSQL_SA_PASSWORD: "Apserp#2026Ci"
+    MSSQL_SA_PASSWORD: "AsChain#2026Ci"
     # 集成测试开关：CI 打开；本地不设即自动跳过
     IT_ENABLED: "true"
     IT_DB_URL: "jdbc:sqlserver://mssql:1433;databaseName=ASChain_TEST;encrypt=false;trustServerCertificate=true"
     IT_DB_USER: "sa"
-    IT_DB_PASSWORD: "Apserp#2026Ci"
+    IT_DB_PASSWORD: "AsChain#2026Ci"
   script:
     # SQL Server 容器启动后 15–40 秒才可连接，先探活再建库
     - |

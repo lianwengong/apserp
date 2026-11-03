@@ -35,9 +35,9 @@ if (Test-Path $localRepo) {
     $mvnArgs += @("-Dmaven.repo.local=$localRepo", '-Dmaven.repo.local.blocked=true')
 }
 
-$itUrl  = 'jdbc:sqlserver://localhost:1433;databaseName=APSErpV3_TEST;encrypt=false;trustServerCertificate=true'
-$itUser = 'apserp_dev'
-$itPass = 'Apserp#2026Dev'
+$itUrl  = 'jdbc:sqlserver://localhost:1433;databaseName=ASChain_TEST;encrypt=false;trustServerCertificate=true'
+$itUser = 'aschain_dev'
+$itPass = 'AsChain#2026Dev'
 
 $script:step = 0
 function Step($name, [scriptblock]$action) {
