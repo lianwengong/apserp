@@ -1,78 +1,96 @@
 <script setup lang="ts">
 defineOptions({ name: 'PlatformUserView' })
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Key, Refresh, Search, SwitchButton, UserFilled } from '@element-plus/icons-vue'
+import { Key, Plus, Refresh, Search, SwitchButton } from '@element-plus/icons-vue'
 import {
-  listAdminRoles,
-  listAdminUsers,
-  resetAdminUserPassword,
-  setAdminUserEnabled,
-  setAdminUserRoles
+  createPlatformAccount,
+  listPlatformAccounts,
+  resetPlatformAccountPassword,
+  setPlatformAccountEnabled
 } from '../../api/platformUser'
-import type { AdminRole, AdminUserRow } from '../../api/platformUser'
-import { listTenants } from '../../api/admin'
-import type { TenantDto } from '../../api/admin'
+import type { PlatformAccountRow } from '../../api/platformUser'
 import { formatDateTime } from '../../utils/format'
 
 const loading = ref(false)
 const error = ref('')
-const rows = ref<AdminUserRow[]>([])
-const total = ref(0)
-const tenants = ref<TenantDto[]>([])
+const rows = ref<PlatformAccountRow[]>([])
+const keyword = ref('')
 
-const query = reactive({ keyword: '', tenantId: null as number | null, page: 1, size: 20 })
-
-const roleDialog = reactive({
+const createDialog = reactive({
   visible: false,
-  user: null as AdminUserRow | null,
-  roles: [] as AdminRole[],
-  selected: [] as number[],
-  saving: false
+  saving: false,
+  userName: '',
+  displayName: '',
+  password: ''
 })
 
 const pwdDialog = reactive({
   visible: false,
-  user: null as AdminUserRow | null,
-  password: '',
-  saving: false
+  saving: false,
+  row: null as PlatformAccountRow | null,
+  password: ''
 })
 
-const pwdValid = computed(
-  () => /^(?=.*[A-Za-z])(?=.*\d).{8,64}$/.test(pwdDialog.password)
-)
+const passwordValid = (value: string): boolean => /^(?=.*[A-Za-z])(?=.*\d).{8,64}$/.test(value)
 
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await listAdminUsers({
-      keyword: query.keyword.trim() || undefined,
-      tenantId: query.tenantId,
-      page: query.page,
-      size: query.size
-    })
-    rows.value = result.items
-    total.value = result.total
+    rows.value = await listPlatformAccounts(keyword.value.trim() || undefined)
   } catch (ex) {
-    error.value = ex instanceof Error ? ex.message : '用户列表加载失败'
+    error.value = ex instanceof Error ? ex.message : '平台账号加载失败'
   } finally {
     loading.value = false
   }
 }
 
-async function search(): Promise<void> {
-  query.page = 1
-  await load()
+function openCreate(): void {
+  createDialog.userName = ''
+  createDialog.displayName = ''
+  createDialog.password = ''
+  createDialog.visible = true
 }
 
-async function toggle(row: AdminUserRow): Promise<void> {
+async function submitCreate(): Promise<void> {
+  if (createDialog.saving) return
+  if (!/^[A-Za-z][A-Za-z0-9_.-]{1,49}$/.test(createDialog.userName.trim())) {
+    ElMessage.warning('账号名只能是字母开头的 2-50 位字母/数字/下划线/点/短横线')
+    return
+  }
+  if (!createDialog.displayName.trim()) {
+    ElMessage.warning('请填写显示名称')
+    return
+  }
+  if (!passwordValid(createDialog.password)) {
+    ElMessage.warning('口令 8-64 位，必须同时包含字母与数字')
+    return
+  }
+  createDialog.saving = true
+  try {
+    await createPlatformAccount({
+      userName: createDialog.userName.trim(),
+      displayName: createDialog.displayName.trim(),
+      password: createDialog.password
+    })
+    ElMessage.success('平台账号已创建，首次登录需改密')
+    createDialog.visible = false
+    await load()
+  } catch (ex) {
+    ElMessage.error(ex instanceof Error ? ex.message : '创建失败')
+  } finally {
+    createDialog.saving = false
+  }
+}
+
+async function toggle(row: PlatformAccountRow): Promise<void> {
   const next = !row.enabled
   try {
     await ElMessageBox.confirm(
       next
-        ? `启用后「${row.displayName || row.userName}」可以重新登录。`
-        : `停用后「${row.displayName || row.userName}」将立即无法登录；已登录的会话在令牌过期后失效。`,
+        ? `启用后「${row.displayName || row.userName}」可以登录平台管理入口。`
+        : `停用后「${row.displayName || row.userName}」将无法登录平台管理入口。`,
       next ? '启用账号' : '停用账号',
       { type: 'warning', confirmButtonText: next ? '启用' : '停用', cancelButtonText: '取消' }
     )
@@ -80,7 +98,7 @@ async function toggle(row: AdminUserRow): Promise<void> {
     return
   }
   try {
-    await setAdminUserEnabled(row.id, next)
+    await setPlatformAccountEnabled(row.id, next)
     ElMessage.success(next ? '已启用' : '已停用')
     await load()
   } catch (ex) {
@@ -88,49 +106,18 @@ async function toggle(row: AdminUserRow): Promise<void> {
   }
 }
 
-async function openRoles(row: AdminUserRow): Promise<void> {
-  roleDialog.user = row
-  roleDialog.roles = []
-  roleDialog.selected = []
-  roleDialog.visible = true
-  try {
-    const roles = await listAdminRoles(row.tenantId)
-    roleDialog.roles = roles
-    roleDialog.selected = roles
-      .filter((role) => row.roles.includes(role.code))
-      .map((role) => role.id)
-  } catch (ex) {
-    ElMessage.error(ex instanceof Error ? ex.message : '角色加载失败')
-  }
-}
-
-async function saveRoles(): Promise<void> {
-  if (!roleDialog.user) return
-  roleDialog.saving = true
-  try {
-    await setAdminUserRoles(roleDialog.user.id, roleDialog.selected)
-    ElMessage.success('角色已保存')
-    roleDialog.visible = false
-    await load()
-  } catch (ex) {
-    ElMessage.error(ex instanceof Error ? ex.message : '保存失败')
-  } finally {
-    roleDialog.saving = false
-  }
-}
-
-function openPassword(row: AdminUserRow): void {
-  pwdDialog.user = row
+function openPassword(row: PlatformAccountRow): void {
+  pwdDialog.row = row
   pwdDialog.password = ''
   pwdDialog.visible = true
 }
 
-async function savePassword(): Promise<void> {
-  if (!pwdDialog.user || !pwdValid.value) return
+async function submitPassword(): Promise<void> {
+  if (!pwdDialog.row || !passwordValid(pwdDialog.password)) return
   pwdDialog.saving = true
   try {
-    await resetAdminUserPassword(pwdDialog.user.id, pwdDialog.password)
-    ElMessage.success('口令已重置，对方下次登录必须改密')
+    const result = await resetPlatformAccountPassword(pwdDialog.row.id, pwdDialog.password)
+    ElMessage.success(`已重置 ${result.userName} 的口令，下次登录需改密`)
     pwdDialog.visible = false
   } catch (ex) {
     ElMessage.error(ex instanceof Error ? ex.message : '重置失败')
@@ -139,54 +126,36 @@ async function savePassword(): Promise<void> {
   }
 }
 
-onMounted(async () => {
-  try {
-    tenants.value = await listTenants()
-  } catch {
-    // 租户列表拿不到不影响用户列表
-  }
-  await load()
-})
+onMounted(load)
 </script>
 
 <template>
   <div class="page">
     <section class="card head">
       <div>
-        <p class="eyebrow">USERS</p>
-        <h1>用户与权限</h1>
+        <p class="eyebrow">PLATFORM ACCOUNTS</p>
+        <h1>平台账号</h1>
         <p class="muted sub">
-          平台视角的跨租户登录账号：可启停账号、重置口令（强制改密）、分配角色。
-          平台登录才能进入；租户内只能管自己租户的用户。
+          只管理平台账号（无租户名的平台登录账号）。租户里的用户请到对应租户的用户管理里维护——
+          两边分开，避免平台管理员误改客户账号。
         </p>
       </div>
-      <div class="filters">
-        <el-select
-          v-model="query.tenantId"
-          placeholder="全部租户"
-          clearable
-          class="tenant-select"
-          @change="search"
-        >
-          <el-option
-            v-for="tenant in tenants"
-            :key="tenant.id"
-            :label="`${tenant.code} · ${tenant.name}`"
-            :value="tenant.id"
-          />
-        </el-select>
+      <div class="actions">
         <el-input
-          v-model="query.keyword"
-          placeholder="用户名 / 姓名 / 手机"
+          v-model="keyword"
+          placeholder="账号 / 显示名"
           clearable
           class="search"
-          @keyup.enter="search"
+          @keyup.enter="load"
         >
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <el-button type="primary" :loading="loading" @click="search">查询</el-button>
         <el-button :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon>
+        </el-button>
+        <el-button type="primary" @click="openCreate">
+          <el-icon><Plus /></el-icon>
+          新增平台账号
         </el-button>
       </div>
     </section>
@@ -195,49 +164,28 @@ onMounted(async () => {
 
     <section class="card body">
       <el-table v-loading="loading" :data="rows" border height="100%" row-key="id">
-        <el-table-column prop="tenantCode" label="租户" width="90">
-          <template #default="{ row }"><span class="mono">{{ row.tenantCode }}</span></template>
+        <el-table-column prop="userName" label="账号" width="180">
+          <template #default="{ row }"><span class="mono">{{ row.userName }}</span></template>
         </el-table-column>
-        <el-table-column prop="userName" label="用户名" width="150">
-          <template #default="{ row }">
-            <span class="mono">{{ row.userName }}</span>
-            <el-tag v-if="row.platformAccount" size="small" type="warning" effect="plain" class="badge">
-              平台
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="displayName" label="姓名" width="130">
+        <el-table-column prop="displayName" label="显示名称" min-width="180">
           <template #default="{ row }">{{ row.displayName || '—' }}</template>
         </el-table-column>
-        <el-table-column label="角色" min-width="160">
-          <template #default="{ row }">
-            <div class="roles">
-              <el-tag v-for="role in row.roles" :key="role" size="small" effect="light">
-                {{ role }}
-              </el-tag>
-              <span v-if="!row.roles.length" class="muted">未分配</span>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="110" align="center">
+        <el-table-column label="状态" width="150" align="center">
           <template #default="{ row }">
             <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="light">
               {{ row.enabled ? '启用' : '停用' }}
             </el-tag>
-            <el-tag v-if="row.locked" type="danger" size="small" effect="plain" class="badge">
-              锁定
-            </el-tag>
+            <el-tag v-if="row.locked" type="danger" size="small" effect="plain" class="badge">锁定</el-tag>
             <el-tag v-else-if="row.mustChangePwd" type="warning" size="small" effect="plain" class="badge">
               待改密
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="最近登录" width="160">
+        <el-table-column label="最近登录" width="170">
           <template #default="{ row }">{{ row.lastLoginAt ? formatDateTime(row.lastLoginAt) : '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="240" align="center" fixed="right">
+        <el-table-column label="操作" width="220" align="center" fixed="right">
           <template #default="{ row }">
-            <el-button text size="small" :icon="UserFilled" @click="openRoles(row)">角色</el-button>
             <el-button text size="small" :icon="Key" @click="openPassword(row)">重置口令</el-button>
             <el-button
               text
@@ -251,61 +199,63 @@ onMounted(async () => {
           </template>
         </el-table-column>
         <template #empty>
-          <el-empty description="没有匹配的用户" :image-size="64" />
+          <el-empty description="还没有平台账号" :image-size="64" />
         </template>
       </el-table>
     </section>
 
-    <section class="card foot">
-      <span class="muted">共 {{ total }} 个账号</span>
-      <el-pagination
-        v-model:current-page="query.page"
-        :page-size="query.size"
-        :total="total"
-        layout="prev, pager, next"
-        background
-        @current-change="load"
-      />
-    </section>
-
-    <el-dialog v-model="roleDialog.visible" title="分配角色" width="480px">
-      <p class="dialog-hint">
-        {{ roleDialog.user?.tenantCode }} · {{ roleDialog.user?.userName }}
-        （{{ roleDialog.user?.displayName || '未命名' }}）
-      </p>
-      <el-select v-model="roleDialog.selected" multiple filterable class="role-select" placeholder="选择角色">
-        <el-option
-          v-for="role in roleDialog.roles"
-          :key="role.id"
-          :label="`${role.code} · ${role.name}`"
-          :value="role.id"
-        />
-      </el-select>
-      <p class="dialog-note muted">保存为覆盖式：勾选结果即最终角色，会清空未勾选的角色。</p>
+    <el-dialog v-model="createDialog.visible" title="新增平台账号" width="480px" destroy-on-close>
+      <el-form label-width="96px">
+        <el-form-item label="账号" required>
+          <el-input v-model="createDialog.userName" placeholder="字母开头，如 ops01" />
+        </el-form-item>
+        <el-form-item label="显示名称" required>
+          <el-input v-model="createDialog.displayName" placeholder="如 运维小王" />
+        </el-form-item>
+        <el-form-item label="初始口令" required>
+          <el-input
+            v-model="createDialog.password"
+            type="password"
+            show-password
+            placeholder="8-64 位，含字母与数字；首次登录需改密"
+          />
+        </el-form-item>
+      </el-form>
       <template #footer>
-        <el-button @click="roleDialog.visible = false">取消</el-button>
-        <el-button type="primary" :loading="roleDialog.saving" @click="saveRoles">保存</el-button>
+        <el-button @click="createDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="createDialog.saving" @click="submitCreate">创建</el-button>
       </template>
     </el-dialog>
 
-    <el-dialog v-model="pwdDialog.visible" title="重置口令" width="440px">
-      <p class="dialog-hint">
-        {{ pwdDialog.user?.tenantCode }} · {{ pwdDialog.user?.userName }}
-      </p>
+    <el-dialog v-model="pwdDialog.visible" title="重置平台账号口令" width="440px">
+      <p class="dialog-hint">账号：<strong>{{ pwdDialog.row?.userName }}</strong></p>
       <el-input
         v-model="pwdDialog.password"
         type="password"
         show-password
         placeholder="新口令 8-64 位，含字母与数字"
       />
-      <p class="dialog-note muted">重置后对方下次登录会被强制改密，同时清除失败计数与锁定。</p>
+      <p class="dialog-note muted">重置后该账号下次登录会被强制改密，同时清除失败计数与锁定。</p>
       <template #footer>
         <el-button @click="pwdDialog.visible = false">取消</el-button>
-        <el-button type="primary" :disabled="!pwdValid" :loading="pwdDialog.saving" @click="savePassword">
+        <el-button
+          type="primary"
+          :disabled="!passwordValid(pwdDialog.password)"
+          :loading="pwdDialog.saving"
+          @click="submitPassword"
+        >
           重置
         </el-button>
       </template>
     </el-dialog>
+
+    <section class="card note">
+      <strong>说明</strong>
+      <span>
+        平台账号与业务租户解绑，挂在保留租户「平台运营」下，只能登录平台管理入口；
+        租户管理员与租户员工在各自的租户内维护（租户管理 → 管理员口令 / 租户内用户管理）。
+      </span>
+    </section>
   </div>
 </template>
 
@@ -334,19 +284,15 @@ onMounted(async () => {
 .sub {
   margin: 6px 0 0;
   font-size: 12.5px;
-  max-width: 640px;
+  max-width: 660px;
   line-height: 1.7;
 }
 
-.filters {
+.actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-}
-
-.tenant-select {
-  width: 200px;
 }
 
 .search {
@@ -355,37 +301,34 @@ onMounted(async () => {
 
 .body {
   flex: 1;
-  min-height: 240px;
+  min-height: 220px;
   overflow: hidden;
   padding: 8px;
-}
-
-.roles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
 }
 
 .badge {
   margin-left: 6px;
 }
 
-.foot {
+.note {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 16px;
+  gap: 10px;
+  align-items: baseline;
+  padding: 12px 16px;
   font-size: 12px;
+  color: #5b6d7f;
+  line-height: 1.7;
+}
+
+.note strong {
+  color: var(--ink);
+  white-space: nowrap;
 }
 
 .dialog-hint {
   margin: 0 0 10px;
   font-size: 13px;
   color: var(--ink);
-}
-
-.role-select {
-  width: 100%;
 }
 
 .dialog-note {

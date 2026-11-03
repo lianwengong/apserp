@@ -12,17 +12,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 平台管理：跨租户登录用户与权限。
+ * 平台管理：<b>平台账号</b>（不含租户里的账号）。
  *
  * <pre>
- * GET  /api/admin/users?keyword=&tenantId=&page=&size=   用户列表（跨租户）
- * GET  /api/admin/users/roles?tenantId=                  该租户可选角色
- * PUT  /api/admin/users/{id}/enabled                     启用/停用
- * POST /api/admin/users/{id}/reset-password              重置口令（强制改密）
- * PUT  /api/admin/users/{id}/roles                       覆盖式分配角色
+ * GET  /api/admin/users?keyword=      平台账号列表
+ * POST /api/admin/users               新增平台账号
+ * PUT  /api/admin/users/{id}/enabled  启用/停用
+ * POST /api/admin/users/{id}/reset-password 重置口令（强制改密）
  * </pre>
  *
- * <p>都要求平台登录（平台作用域）；租户会话调用 403。</p>
+ * <p>都要求平台登录（平台作用域）；租户会话调用 403。
+ * 租户自己的账号在租户的用户管理里维护，不从这里进。</p>
  */
 @RestController
 @RequestMapping("/api/admin/users")
@@ -40,21 +40,16 @@ public class PlatformUserController {
     public record ResetPasswordRequest(String newPassword) {
     }
 
-    public record RolesRequest(List<Long> roleIds) {
-    }
-
     @GetMapping
-    public ApiResult<PlatformUserService.PageResult> list(
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) Long tenantId,
-            @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ApiResult.ok(platformUser.list(keyword, tenantId, page, size));
+    public ApiResult<List<PlatformUserService.UserRow>> list(
+            @RequestParam(required = false) String keyword) {
+        return ApiResult.ok(platformUser.list(keyword));
     }
 
-    @GetMapping("/roles")
-    public ApiResult<List<PlatformUserService.RoleDto>> roles(@RequestParam long tenantId) {
-        return ApiResult.ok(platformUser.roles(tenantId));
+    @PostMapping
+    public ApiResult<PlatformUserService.UserRow> create(
+            @RequestBody PlatformUserService.CreateRequest req) {
+        return ApiResult.ok(platformUser.create(req));
     }
 
     @PutMapping("/{id}/enabled")
@@ -64,15 +59,9 @@ public class PlatformUserController {
     }
 
     @PostMapping("/{id}/reset-password")
-    public ApiResult<Void> resetPassword(@PathVariable long id,
-                                         @RequestBody ResetPasswordRequest req) {
-        platformUser.resetPassword(id, req.newPassword());
-        return ApiResult.ok(null);
-    }
-
-    @PutMapping("/{id}/roles")
-    public ApiResult<Void> setRoles(@PathVariable long id, @RequestBody RolesRequest req) {
-        platformUser.setRoles(id, req.roleIds());
-        return ApiResult.ok(null);
+    public ApiResult<java.util.Map<String, String>> resetPassword(
+            @PathVariable long id, @RequestBody ResetPasswordRequest req) {
+        String userName = platformUser.resetPassword(id, req.newPassword());
+        return ApiResult.ok(java.util.Map.of("userName", userName));
     }
 }
