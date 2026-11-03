@@ -93,7 +93,7 @@ class TenantAdminIT {
 
     /** 还原 JwtAuthFilter 的平台上下文写法，避免测试里手写 set 时漏掉 pf。 */
     private void platformContext() {
-        AuthService.LoginResult login = authService.loginPlatform("admin", PASSWORD);
+        AuthService.LoginResult login = authService.loginPlatform("platadmin", PASSWORD);
         Claims claims = jwtService.parse(login.token());
         TenantContext.set(((Number) claims.get(JwtService.CLAIM_TENANT)).longValue(),
                 ((Number) claims.get(JwtService.CLAIM_USER)).longValue(),
@@ -165,11 +165,27 @@ class TenantAdminIT {
     }
 
     @Test
-    @DisplayName("不能停用平台账号自己所在的租户")
-    void cannot_disable_home_tenant() {
-        assertThatThrownBy(() -> tenantAdmin.setEnabled(1L, false))
+    @DisplayName("平台账号与租户解绑：平台租户不可启停，业务租户可以正常停用")
+    void platform_account_is_not_bound_to_a_tenant() {
+        // 先开一个业务租户，保证不会命中「至少保留一个启用租户」的护栏
+        TenantAdminService.CreateResult created = tenantAdmin.create(
+                new TenantAdminService.CreateRequest(code, "解绑测试租户", null, null, 1, "tadmin",
+                        ADMIN_PASSWORD, null));
+
+        // 平台账号在平台租户（Id=0）里，停用 T001 不再有任何「所属租户」限制
+        tenantAdmin.setEnabled(1L, false);
+        platformContext();
+        assertThatThrownBy(() -> authService.login("T001", "admin", PASSWORD))
                 .isInstanceOf(ApiException.class)
-                .hasMessageContaining("不能停用");
+                .hasMessageContaining("租户已停用");
+        platformContext();
+        tenantAdmin.setEnabled(1L, true);
+
+        // 平台租户本身只承载平台账号，不参与启停
+        assertThatThrownBy(() -> tenantAdmin.setEnabled(0L, false))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("平台租户");
+        assertThat(created.tenantId()).isPositive();
     }
 
     @Test

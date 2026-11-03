@@ -58,7 +58,7 @@ class PlatformLoginIT {
     @Test
     @DisplayName("平台登录不需要租户名，令牌带平台作用域")
     void platform_login_without_tenant() {
-        AuthService.LoginResult result = authService.loginPlatform("admin", "AsChain@2026");
+        AuthService.LoginResult result = authService.loginPlatform("platadmin", "AsChain@2026");
         assertThat(result.appType()).isEqualTo(TenantContext.APP_PLATFORM);
         assertThat(result.token()).isNotBlank();
 
@@ -70,7 +70,7 @@ class PlatformLoginIT {
     @Test
     @DisplayName("平台会话能看到所有租户（RLS 旁路）")
     void platform_session_sees_all_tenants() {
-        AuthService.LoginResult result = authService.loginPlatform("admin", "AsChain@2026");
+        AuthService.LoginResult result = authService.loginPlatform("platadmin", "AsChain@2026");
         Claims claims = jwtService.parse(result.token());
         int homeTenant = ((Number) claims.get(JwtService.CLAIM_TENANT)).intValue();
         boolean scope = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_PLATFORM));
@@ -97,7 +97,7 @@ class PlatformLoginIT {
     @Test
     @DisplayName("平台登录口令错误统一提示，不区分账号是否存在")
     void platform_login_wrong_password() {
-        assertThatThrownBy(() -> authService.loginPlatform("admin", "Wrong@123456"))
+        assertThatThrownBy(() -> authService.loginPlatform("platadmin", "Wrong@123456"))
                 .isInstanceOf(ApiException.class);
         assertThatThrownBy(() -> authService.loginPlatform("no_such_platform_user", "AsChain@2026"))
                 .isInstanceOf(ApiException.class);

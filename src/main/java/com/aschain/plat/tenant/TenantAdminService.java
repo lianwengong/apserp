@@ -78,17 +78,31 @@ public class TenantAdminService {
             throw new ApiException(ErrorCode.DUPLICATE_KEY, "租户编码已存在：" + code);
         }
 
-        int templateTenantId = req.templateTenantId() == null
-                ? TenantContext.tenantId().intValue()
-                : req.templateTenantId();
+        // 模板租户：平台账号现在归属「平台租户」(Id=0)，那里没有业务元数据，
+        // 所以默认取第一个启用中的业务租户作为模板；显式传入时也不允许指向平台租户。
+        Integer templateTenantId = req.templateTenantId();
+        if (templateTenantId == null) {
+            List<Integer> candidates = jdbc.queryForList(
+                    "SELECT TOP 1 Id FROM plat.Tenant "
+                            + "WHERE IsDeleted = 0 AND IsPlatformTenant = 0 AND IsEnabled = 1 "
+                            + "ORDER BY Id", Integer.class);
+            if (candidates.isEmpty()) {
+                throw new ApiException(ErrorCode.BAD_REQUEST,
+                        "没有可用的模板租户，请先启用一个业务租户");
+            }
+            templateTenantId = candidates.get(0);
+        }
         if (templateTenantId <= 0) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "模板租户不正确");
         }
-        Integer templateExists = jdbc.queryForObject(
-                "SELECT COUNT(*) FROM plat.Tenant WHERE Id = ? AND IsDeleted = 0",
-                Integer.class, templateTenantId);
-        if (templateExists == null || templateExists == 0) {
+        List<Map<String, Object>> template = jdbc.queryForList(
+                "SELECT Id, IsPlatformTenant FROM plat.Tenant WHERE Id = ? AND IsDeleted = 0",
+                templateTenantId);
+        if (template.isEmpty()) {
             throw new ApiException(ErrorCode.NOT_FOUND, "模板租户不存在");
+        }
+        if (Boolean.TRUE.equals(template.get(0).get("IsPlatformTenant"))) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "平台租户不能作为业务模板");
         }
 
         String adminUserName = req.adminUserName() == null || req.adminUserName().isBlank()
@@ -115,23 +129,24 @@ public class TenantAdminService {
         requirePlatformScope();
 
         List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT Id, Code, IsEnabled FROM plat.Tenant WHERE Id = ? AND IsDeleted = 0", tenantId);
+                "SELECT Id, Code, IsEnabled, IsPlatformTenant FROM plat.Tenant "
+                        + "WHERE Id = ? AND IsDeleted = 0", tenantId);
         if (rows.isEmpty()) {
             throw new ApiException(ErrorCode.NOT_FOUND, "租户不存在");
+        }
+        if (Boolean.TRUE.equals(rows.get(0).get("IsPlatformTenant"))) {
+            throw new ApiException(ErrorCode.BAD_REQUEST,
+                    "平台租户只承载平台账号，不参与启停；请管理具体业务租户");
         }
         boolean current = Boolean.TRUE.equals(rows.get(0).get("IsEnabled"));
         if (current == enabled) {
             return;
         }
         if (!enabled) {
-            // 不能停用平台账号自己所在的租户：停完这个平台会话也会失去数据访问能力
-            Long homeTenant = TenantContext.tenantId();
-            if (homeTenant != null && homeTenant == tenantId) {
-                throw new ApiException(ErrorCode.BAD_REQUEST,
-                        "不能停用当前平台账号所属的租户，请换一个租户操作");
-            }
+            // 平台账号与租户解绑后，这里只需要保证业务租户不被全部停掉
             Integer enabledCount = jdbc.queryForObject(
-                    "SELECT COUNT(*) FROM plat.Tenant WHERE IsEnabled = 1 AND IsDeleted = 0",
+                    "SELECT COUNT(*) FROM plat.Tenant "
+                            + "WHERE IsEnabled = 1 AND IsDeleted = 0 AND IsPlatformTenant = 0",
                     Integer.class);
             if (enabledCount != null && enabledCount <= 1) {
                 throw new ApiException(ErrorCode.BAD_REQUEST, "至少要保留一个启用状态的租户");

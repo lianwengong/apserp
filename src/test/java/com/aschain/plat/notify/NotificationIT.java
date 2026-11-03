@@ -65,23 +65,26 @@ class NotificationIT {
     @Autowired
     JdbcTemplate jdbc;
 
-    private long platformUserId;
+    /** 业务会话的收件人（T001 admin）：通知读写都按收件人收口 */
+    private long userId;
     private String code;
 
     @BeforeEach
     void setUp() {
         code = "IT" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmssSSS"));
         platformContext();
-        platformUserId = jdbc.queryForObject(
+        // 平台账号住在平台租户(Id=0)；通知测试用业务账号（T001 admin）更贴近真实场景
+        userId = jdbc.queryForObject(
                 "SELECT Id FROM plat.[User] WHERE TenantId = 1 AND UserName = 'admin'", Long.class);
-        jdbc.update("DELETE FROM plat.Notification WHERE RecipientId = ?", platformUserId);
+        jdbc.update("DELETE FROM plat.Notification WHERE RecipientId = ?", userId);
+        businessContext();
     }
 
     @AfterEach
     void tearDown() {
         platformContext();
         try {
-            jdbc.update("DELETE FROM plat.Notification WHERE RecipientId = ?", platformUserId);
+            jdbc.update("DELETE FROM plat.Notification WHERE RecipientId = ?", userId);
             for (Long id : jdbc.queryForList(
                     "SELECT Id FROM plat.Tenant WHERE Code LIKE 'IT%' AND IsDeleted = 0", Long.class)) {
                 jdbc.update("UPDATE plat.[User] SET IsEnabled = 0, IsDeleted = 1 WHERE TenantId = ?", id);
@@ -92,8 +95,18 @@ class NotificationIT {
         }
     }
 
+    private void businessContext() {
+        AuthService.LoginResult login = authService.login("T001", "admin", PASSWORD);
+        Claims claims = jwtService.parse(login.token());
+        TenantContext.set(((Number) claims.get(JwtService.CLAIM_TENANT)).longValue(),
+                ((Number) claims.get(JwtService.CLAIM_USER)).longValue(),
+                Boolean.TRUE.equals(claims.get(JwtService.CLAIM_ADMIN)),
+                TenantContext.APP_BUSINESS,
+                Boolean.TRUE.equals(claims.get(JwtService.CLAIM_PLATFORM)));
+    }
+
     private void platformContext() {
-        AuthService.LoginResult login = authService.loginPlatform("admin", PASSWORD);
+        AuthService.LoginResult login = authService.loginPlatform("platadmin", PASSWORD);
         Claims claims = jwtService.parse(login.token());
         TenantContext.set(((Number) claims.get(JwtService.CLAIM_TENANT)).longValue(),
                 ((Number) claims.get(JwtService.CLAIM_USER)).longValue(),
@@ -104,9 +117,9 @@ class NotificationIT {
     @Test
     @DisplayName("通知按收件人隔离：写入、未读计数、标记已读")
     void notification_lifecycle() {
-        notificationService.record(1L, platformUserId, NotificationService.TYPE_INFO,
+        notificationService.record(1L, userId, NotificationService.TYPE_INFO,
                 "IT-通知一", "内容一", "TEST", null, null);
-        long second = notificationService.record(1L, platformUserId, NotificationService.TYPE_WARN,
+        long second = notificationService.record(1L, userId, NotificationService.TYPE_WARN,
                 "IT-通知二", "内容二", "TEST", null, "/admin/tenants");
 
         assertThat(notificationService.unreadCount()).isEqualTo(2);
@@ -145,6 +158,8 @@ class NotificationIT {
     @Test
     @DisplayName("租户到期：扫描后自动停用，并给平台账号发通知")
     void overdue_tenant_is_disabled_and_notified() {
+        // 开通与扫描都要求平台作用域；扫描本身会把通知发给平台账号（平台租户里的 platadmin）
+        platformContext();
         TenantAdminService.CreateResult created = tenantAdmin.create(
                 new TenantAdminService.CreateRequest(code, "到期测试租户", null, null, 1, "tadmin",
                         "Tenant@2026a", null));
@@ -158,6 +173,8 @@ class NotificationIT {
         Boolean enabled = jdbc.queryForObject(
                 "SELECT IsEnabled FROM plat.Tenant WHERE Id = ?", Boolean.class, created.tenantId());
         assertThat(enabled).isFalse();
+
+        // 扫描后上下文已恢复成平台会话（tenant=0, user=platadmin），直接读平台账号的通知
         assertThat(notificationService.list(50))
                 .anySatisfy(n -> {
                     assertThat(n.title()).contains("到期自动停用");

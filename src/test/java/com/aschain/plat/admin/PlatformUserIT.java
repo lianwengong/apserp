@@ -93,7 +93,7 @@ class PlatformUserIT {
     }
 
     private void platformContext() {
-        AuthService.LoginResult login = authService.loginPlatform("admin", "AsChain@2026");
+        AuthService.LoginResult login = authService.loginPlatform("platadmin", "AsChain@2026");
         Claims claims = jwtService.parse(login.token());
         TenantContext.set(((Number) claims.get(JwtService.CLAIM_TENANT)).longValue(),
                 ((Number) claims.get(JwtService.CLAIM_USER)).longValue(),

@@ -240,7 +240,7 @@ onMounted(load)
       <span>
         开通 = 建租户 + 从当前租户克隆元数据（模块/菜单/页面/权限/角色/数据对象/编码规则/字典）+
         建租户管理员（绑定克隆出的 SYSADMIN，首次登录强制改密）。
-        停用只改 <code>plat.Tenant.IsEnabled</code>，是可逆操作；当前平台账号所属租户不能停用。
+        停用只改 <code>plat.Tenant.IsEnabled</code>，是可逆操作；平台账号归属「平台运营」保留租户，与业务租户解绑。
       </span>
     </section>
   </div>

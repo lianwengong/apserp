@@ -173,7 +173,7 @@ async function submit(): Promise<void> {
 
         <p v-if="isDev" class="dev-hint">
           <template v-if="isPlatform">
-            开发环境平台账号：<code>admin / AsChain@2026</code>
+            开发环境平台账号：<code>platadmin / AsChain@2026</code>
           </template>
           <template v-else>开发环境演示账号：<code>T001 / admin / AsChain@2026</code></template>
         </p>

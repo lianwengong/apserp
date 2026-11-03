@@ -32,7 +32,7 @@ public class PlatformAdminService {
         return jdbc.query("""
                         SELECT Id, Code, Name, ShortName, Industry, IsEnabled, CreatedAt, ExpireAt
                         FROM plat.Tenant
-                        WHERE IsDeleted = 0
+                        WHERE IsDeleted = 0 AND IsPlatformTenant = 0
                         ORDER BY Id
                         """,
                 (rs, i) -> new TenantDto(
