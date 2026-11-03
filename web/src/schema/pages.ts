@@ -43,7 +43,7 @@ export const workbenchPage: PageSchema = registerPage({
       { label: '基础资料中心', to: '/page/master-data', icon: 'Files' },
       { label: '品牌管理', to: '/object/md.brand', icon: 'PriceTag' },
       { label: '往来单位', to: '/object/md.partner', icon: 'OfficeBuilding' },
-      { label: '设计器中心', to: '/design', icon: 'SetUp' }
+      { label: '我的待办', to: '/todo', icon: 'Grid' }
     ],
     recentObjectCodes: ['md.brand', 'md.brandcontact', 'md.partner']
   },

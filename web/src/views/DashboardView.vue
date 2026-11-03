@@ -4,6 +4,7 @@ import type { Component } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   ArrowRight,
+  Switch,
   Coin,
   Files,
   Grid,
@@ -232,18 +233,13 @@ function openObject(code: string): void {
         </div>
         <template v-if="user?.platformAdmin">
           <el-divider />
-          <header class="section-head"><h2>平台管理</h2></header>
+          <header class="section-head"><h2>去平台管理</h2></header>
           <div class="shortcut-list">
-            <button type="button" class="shortcut" @click="open('/admin')">
-              <el-icon><Grid /></el-icon><span>平台概览</span>
-            </button>
-            <button type="button" class="shortcut" @click="open('/admin/tenants')">
-              <el-icon><OfficeBuilding /></el-icon><span>租户管理</span>
-            </button>
-            <button type="button" class="shortcut" @click="open('/admin/menus')">
-              <el-icon><Files /></el-icon><span>菜单总览</span>
+            <button type="button" class="shortcut" @click="open('/login?app=1')">
+              <el-icon><Switch /></el-icon><span>切换到平台管理入口</span>
             </button>
           </div>
+          <p class="side-tip">平台管理与业务管理是两个独立入口，切换需要重新登录。</p>
         </template>
       </div>
     </section>
@@ -367,6 +363,8 @@ function openObject(code: string): void {
 .object-code { font-size: 11px; color: var(--muted); }
 .object-count { font-size: 12px; color: var(--ink-2); }
 .object-arrow { color: var(--muted); }
+
+.side-tip { margin: 8px 2px 0; font-size: 11px; color: var(--muted); line-height: 1.6; }
 
 .shortcut-list { display: flex; flex-direction: column; padding: 8px; }
 .shortcut {
