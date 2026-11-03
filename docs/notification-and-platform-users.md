@@ -42,26 +42,27 @@ POST /api/notification/read-all      全部已读
 - 幂等：只处理仍启用的租户，第二次扫描不会重复发通知。
 - 手动触发：`POST /api/admin/tenants/expire-scan`（运维用，返回本次停用数）。
 
-## 3. 平台用户与权限（`/admin/users`）
+## 3. 平台账号（`/admin/users`）
 
-跨租户视角的登录账号清单，菜单 `900203 用户管理` 已绑到该页面（V54）。
+**只管平台账号**（`plat.User.IsPlatformAccount=1`，挂在保留租户 `Id=0/T000 平台运营` 下）。
+租户里的账号不在这里出现——那是租户自己的用户管理，平台管理员不该顺手改客户账号。
 
 ```
-GET  /api/admin/users?keyword=&tenantId=&page=&size=   列表（带角色、状态、最近登录）
-GET  /api/admin/users/roles?tenantId=                  该租户可选角色
-PUT  /api/admin/users/{id}/enabled                     启用/停用
-POST /api/admin/users/{id}/reset-password              重置口令（强制改密 + 解锁）
-PUT  /api/admin/users/{id}/roles                       覆盖式分配角色
+GET  /api/admin/users?keyword=            平台账号列表
+POST /api/admin/users                     新增平台账号 {userName, displayName, password}
+PUT  /api/admin/users/{id}/enabled        启用/停用
+POST /api/admin/users/{id}/reset-password 重置口令（强制改密 + 解锁）
 ```
 
-- 停用立刻生效：该账号登录返回「账号已停用」；已登录会话在令牌过期前仍有效（无主动踢下线）。
-- 重置口令：写新哈希，置 `MustChangePwd=1`，并清 `FailCount/LockedUntil`，避免「改了密码还是登不进」。
-- 分配角色：roleIds 必须是**该用户所在租户**的角色，否则 400；保存是覆盖式。
-- 护栏：不能停用/改自己的账号；停用最后一个可用平台账号会被拒绝。
+- 新增账号自动 `MustChangePwd=1`，首次登录必须改密；账号名限字母开头的 2-50 位；
+- 停用立刻生效：登录平台入口返回「账号已停用」；已登录会话在令牌过期前仍有效（无主动踢下线）；
+- 重置口令：写新哈希 + `MustChangePwd=1` + 清 `FailCount/LockedUntil`；
+- 护栏：不能停用自己；至少保留一个可用平台账号；对租户账号调用这些接口会明确报「请到租户自己的用户管理里维护」；
+- 租户管理员的日常口令维护在「租户管理 → 管理员口令」里（见 `docs/tenant-lifecycle.md`）。
 
 ## 4. 权限边界
 
-| 调用方 | 通知 | 到期扫描 | 平台用户接口 |
+| 调用方 | 通知 | 到期扫描 | 平台账号接口 |
 |---|---|---|---|
 | 平台登录（`app=1` + `pf=true`） | 自己的 | 允许 | 允许 |
 | 租户登录 | 自己的 | 403 | 403 |

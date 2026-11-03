@@ -650,7 +650,7 @@ function onUserCommand(command: string): void {
             灰度 v{{ metaVersion.version }}
           </el-tag>
         </el-tooltip>
-        <el-tooltip v-if="user" :content="`租户编码 ${user.tenantCode}`" placement="bottom">
+        <el-tooltip v-if="user && !isPlatformApp" :content="`租户编码 ${user.tenantCode}`" placement="bottom">
           <el-tag size="small" effect="plain" class="tenant-tag">
             {{ user.tenantName || user.tenantCode }}
           </el-tag>
