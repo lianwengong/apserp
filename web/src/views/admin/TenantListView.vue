@@ -398,7 +398,7 @@ onMounted(load)
       />
       <p class="dialog-note muted">
         重置后该账号下次登录会被强制改密，同时清除失败计数与锁定。
-        没有管理员账号的租户请先在「用户与权限」里创建。
+        租户若还没有管理员账号，重置时会自动补建 admin 并绑定系统管理员角色。
       </p>
       <template #footer>
         <el-button @click="pwdDialog.visible = false">取消</el-button>

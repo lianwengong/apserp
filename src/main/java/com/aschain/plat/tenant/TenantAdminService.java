@@ -125,8 +125,11 @@ public class TenantAdminService {
                 ORDER BY u.IsEnabled DESC, u.Id
                 """, tenantId);
         if (admins.isEmpty()) {
-            throw new ApiException(ErrorCode.NOT_FOUND,
-                    "该租户没有管理员账号（SYSADMIN），请先在用户与权限里创建");
+            // 存量租户可能只有角色、没有用户（种子租户就是这种）：这里直接补建管理员，
+            // 让「维护管理员口令」成为自愈操作，而不是让人先去用户页手动建账号。
+            long createdUserId = insertTenantAdmin(tenantId, "admin", newPassword);
+            log.info("tenant_admin_created_on_reset tenant={} user=admin id={}", tenantId, createdUserId);
+            return "admin";
         }
         long userId = ((Number) admins.get(0).get("Id")).longValue();
         String userName = String.valueOf(admins.get(0).get("UserName"));
@@ -317,15 +320,25 @@ public class TenantAdminService {
         if (userId == null) {
             throw new ApiException(ErrorCode.INTERNAL, "租户管理员创建失败：未返回主键");
         }
-        // 克隆会把角色一起复制过来；按角色编码找，找不到就说明模板本身没配 SYSADMIN
+        // 克隆会把角色一起复制过来；模板没配 SYSADMIN 时补建一个，保证租户一定有人能管
         List<Long> roleIds = jdbc.queryForList(
                 "SELECT Id FROM plat.Role WHERE TenantId = ? AND Code = 'SYSADMIN' AND IsDeleted = 0",
                 Long.class, tenantId);
+        long roleId;
         if (roleIds.isEmpty()) {
-            throw new ApiException(ErrorCode.INTERNAL, "模板租户缺少 SYSADMIN 角色，无法创建租户管理员");
+            jdbc.update("""
+                    INSERT plat.Role (TenantId, Code, Name, RoleType, IsSystem, IsEnabled, Remark,
+                                      IsDeleted, CreatedAt)
+                    VALUES (?, 'SYSADMIN', N'系统管理员', 1, 1, 1, N'租户管理员（自动补建）', 0, sysutcdatetime())
+                    """, tenantId);
+            roleId = jdbc.queryForObject(
+                    "SELECT Id FROM plat.Role WHERE TenantId = ? AND Code = 'SYSADMIN' AND IsDeleted = 0",
+                    Long.class, tenantId);
+        } else {
+            roleId = roleIds.get(0);
         }
         jdbc.update("INSERT plat.UserRole (TenantId, UserId, RoleId) VALUES (?, ?, ?)",
-                tenantId, userId.longValue(), roleIds.get(0));
+                tenantId, userId.longValue(), roleId);
         return userId.longValue();
     }
 

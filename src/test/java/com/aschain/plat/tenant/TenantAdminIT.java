@@ -245,6 +245,27 @@ class TenantAdminIT {
     }
 
     @Test
+    @DisplayName("存量租户没有管理员时，重置口令会自愈补建 admin")
+    void reset_password_creates_admin_when_missing() {
+        // 造一个只有租户行、没有用户的「存量租户」，模拟种子租户的历史状态
+        jdbc.update("""
+                INSERT plat.Tenant (Code, Name, TimeZone, CurrencyCode, DeploymentMode, ShardId,
+                                    IsEnabled, IsPlatformTenant, IsDeleted, CreatedAt)
+                VALUES (?, N'无管理员租户', 'Asia/Shanghai', 'CNY', 1, 0, 1, 0, 0, sysutcdatetime())
+                """, code);
+        Long tenantId = jdbc.queryForObject(
+                "SELECT Id FROM plat.Tenant WHERE Code = ?", Long.class, code);
+
+        String userName = tenantAdmin.resetTenantAdminPassword(tenantId, "SelfHeal@2026a");
+        assertThat(userName).isEqualTo("admin");
+
+        platformContext();
+        var login = authService.login(code, "admin", "SelfHeal@2026a");
+        assertThat(login.tenantId()).isEqualTo(tenantId.intValue());
+        assertThat(login.mustChangePassword()).isTrue();
+    }
+
+    @Test
     @DisplayName("租户会话不能开通/停用租户")
     void tenant_session_cannot_manage_tenants() {
         AuthService.LoginResult business = authService.login("T001", "admin", PASSWORD);
