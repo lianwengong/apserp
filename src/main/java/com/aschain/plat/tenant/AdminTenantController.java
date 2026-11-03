@@ -26,17 +26,28 @@ public class AdminTenantController {
 
     private final TenantProvisionService provisionService;
     private final TenantAdminService tenantAdmin;
+    private final TenantExpiryJob expiryJob;
 
     public AdminTenantController(TenantProvisionService provisionService,
-                                 TenantAdminService tenantAdmin) {
+                                 TenantAdminService tenantAdmin, TenantExpiryJob expiryJob) {
         this.provisionService = provisionService;
         this.tenantAdmin = tenantAdmin;
+        this.expiryJob = expiryJob;
     }
 
     public record ProvisionRequest(int templateTenantId) {
     }
 
     public record EnabledRequest(boolean enabled) {
+    }
+
+    /**
+     * 立即执行一次到期扫描（运维手动触发，正常由每天 01:10 的定时任务执行）。
+     * 返回本次停用的租户数。
+     */
+    @PostMapping("/expire-scan")
+    public ApiResult<Map<String, Integer>> expireScan() {
+        return ApiResult.ok(Map.of("expired", expiryJob.expireOverdue()));
     }
 
     @PostMapping("/{tenantId}/provision")

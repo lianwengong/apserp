@@ -31,6 +31,7 @@ import type { MenuNode } from '../api/menu'
 import type { TreeNavGroup } from '../components/treeNav'
 import { catalog } from '../stores/catalog'
 import { menus } from '../stores/menu'
+import NotificationBell from '../components/NotificationBell.vue'
 import { session } from '../stores/session'
 import { resetSessionCaches } from '../stores/reset'
 import { filterMenuTree, findMenuName } from '../utils/menu'
@@ -593,6 +594,8 @@ function onUserCommand(command: string): void {
             <el-icon><Setting /></el-icon>
           </button>
         </el-tooltip>
+
+        <NotificationBell />
 
         <el-dropdown trigger="click" @command="onUserCommand">
           <button class="user-chip" type="button">
