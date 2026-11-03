@@ -54,6 +54,8 @@ public class MenuService {
               AND m.TerminalType = ?
               AND m.AppType = ?
               AND m.IsDeleted = 0 AND m.IsEnabled = 1 AND m.IsVisible = 1
+              /* 租户未开通（模块停用）的功能不下发；未绑模块的菜单照常显示 */
+              AND (m.ModuleId IS NULL OR md.IsEnabled = 1)
             ORDER BY m.Sort, m.Id
             """;
 

@@ -84,7 +84,18 @@ public class ModuleAdminService {
      * @param keyword 按编码/名称过滤；命中子节点时保留整条祖先链
      */
     public List<ModuleNode> tree(String keyword) {
-        long tenantId = TenantContext.requireTenantId();
+        return tree(keyword, null);
+    }
+
+    /**
+     * 模块树（可按租户查）。
+     *
+     * <p>平台作用域下可传 {@code tenantId} 查看**任意租户**的模块列表——
+     * 平台目录是 {@code tenantId = 0}，业务租户是各自的副本；
+     * 非平台作用域一律忽略该参数，只能看自己租户（防止越权）。</p>
+     */
+    public List<ModuleNode> tree(String keyword, Integer tenantId) {
+        long tenantIdToUse = resolveTenant(tenantId);
         List<ModuleNode> all = jdbc.query("""
                         SELECT m.Id, m.ParentId, m.Code, m.Name, m.EnCode, m.[Level], m.ModuleType,
                                m.Sort, m.Icon, m.Description, m.IsEnabled,
@@ -101,7 +112,7 @@ public class ModuleAdminService {
                         rs.getInt("Level"), rs.getInt("ModuleType"), rs.getInt("Sort"),
                         rs.getString("Icon"), rs.getString("Description"), rs.getBoolean("IsEnabled"),
                         rs.getInt("FunctionCount"), rs.getInt("MenuCount"), 0, List.of()),
-                tenantId);
+                tenantIdToUse);
         List<ModuleNode> tree = buildTree(all);
         String key = keyword == null ? "" : keyword.trim().toLowerCase();
         if (key.isEmpty()) {
@@ -109,6 +120,50 @@ public class ModuleAdminService {
         }
         return filter(tree, key);
     }
+
+    /** 解析要查询的租户：平台作用域可指定，其余强制用当前租户。 */
+    private static long resolveTenant(Integer tenantId) {
+        if (tenantId != null) {
+            if (!TenantContext.isPlatformScope()) {
+                throw new ApiException(ErrorCode.FORBIDDEN, "只有平台可以查看其他租户的模块");
+            }
+            return tenantId;
+        }
+        return TenantContext.requireTenantId();
+    }
+
+    // ---------------------------------------------------------------- 租户模块开通/停用
+
+    /**
+     * 给某个租户开通或停用某个模块。
+     *
+     * <p>只改该租户自己的模块副本与菜单可见性，不动平台目录，也不影响其他租户。</p>
+     *
+     * @return 受影响的菜单行数
+     */
+    @Transactional
+    public int setModuleEnabled(long tenantId, String code, boolean enabled) {
+        if (!TenantContext.isPlatformScope()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "只有平台可以调整租户的模块开通状态");
+        }
+        List<Long> ids = jdbc.queryForList(
+                "SELECT Id FROM plat.[Module] WHERE TenantId = ? AND Code = ? AND IsDeleted = 0",
+                Long.class, tenantId, code);
+        if (ids.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_FOUND,
+                    "该租户还没有这个模块（编码 " + code + "），请先同步产品目录");
+        }
+        long moduleId = ids.get(0);
+        jdbc.update("UPDATE plat.[Module] SET IsEnabled = ?, ModifiedAt = sysutcdatetime() WHERE Id = ?",
+                enabled, moduleId);
+        int menus = jdbc.update(
+                "UPDATE plat.[Menu] SET IsVisible = ? WHERE TenantId = ? AND ModuleId = ? AND IsDeleted = 0",
+                enabled, tenantId, moduleId);
+        log.info("tenant_module tenant={} code={} enabled={} menus={}",
+                tenantId, code, enabled, menus);
+        return menus;
+    }
+
 
     private static List<ModuleNode> buildTree(List<ModuleNode> rows) {
         Map<Long, List<ModuleNode>> byParent = new LinkedHashMap<>();

@@ -107,6 +107,10 @@ class PlatformRoleIT {
         assertThat(roles.stream().filter(r -> "PLAT_ADMIN".equals(r.code())).findFirst())
                 .hasValueSatisfying(r -> assertThat(r.permissions()).contains("PLAT:TENANT", "PLAT:ROLE"));
 
+        // 成员名称随角色一起返回（列表直接展示，不用再点开才知道是谁）
+        assertThat(roles.stream().filter(r -> "PLAT_ADMIN".equals(r.code())).findFirst())
+                .hasValueSatisfying(r -> assertThat(r.members()).contains("platadmin"));
+
         var perms = platformRoles.permissions();
         assertThat(perms).extracting(PlatformRoleService.PermissionDto::resourceKey)
                 .contains("PLAT", "PLAT:TENANT", "PLAT:ACCOUNT", "PLAT:ROLE");

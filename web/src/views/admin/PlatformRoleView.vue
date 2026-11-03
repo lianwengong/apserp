@@ -192,8 +192,21 @@ onMounted(load)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="成员" width="80" align="center">
-          <template #default="{ row }">{{ row.memberCount }}</template>
+        <el-table-column label="成员" min-width="180">
+          <template #default="{ row }">
+            <div class="chips">
+              <el-tag
+                v-for="member in row.members"
+                :key="member"
+                size="small"
+                effect="light"
+                type="info"
+              >
+                {{ member }}
+              </el-tag>
+              <span v-if="!row.members.length" class="muted">暂无成员</span>
+            </div>
+          </template>
         </el-table-column>
         <el-table-column label="操作" width="190" align="center" fixed="right">
           <template #default="{ row }">

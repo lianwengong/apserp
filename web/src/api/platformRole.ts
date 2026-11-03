@@ -6,6 +6,8 @@ export interface PlatformRole {
   name: string
   enabled: boolean
   memberCount: number
+  /** 成员账号（用户名），列表直接展示 */
+  members: string[]
   permissions: string[]
 }
 

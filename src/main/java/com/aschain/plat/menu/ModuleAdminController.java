@@ -51,8 +51,22 @@ public class ModuleAdminController {
 
     @GetMapping("/tree")
     public ApiResult<List<ModuleAdminService.ModuleNode>> tree(
-            @RequestParam(required = false) String keyword) {
-        return ApiResult.ok(moduleAdmin.tree(keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) Integer tenantId) {
+        return ApiResult.ok(moduleAdmin.tree(keyword, tenantId));
+    }
+
+    /** 租户模块开通/停用：只影响该租户的模块副本与其菜单可见性。 */
+    @PostMapping("/tenants/{tenantId}/modules/{code}/toggle")
+    @RequiresPermission(value = "DESIGN:module", action = "write")
+    public ApiResult<Map<String, Integer>> toggleTenantModule(@PathVariable long tenantId,
+                                                              @PathVariable String code,
+                                                              @RequestBody ToggleRequest body) {
+        int menus = moduleAdmin.setModuleEnabled(tenantId, code, body.enabled());
+        return ApiResult.ok(Map.of("menus", menus));
+    }
+
+    public record ToggleRequest(boolean enabled) {
     }
 
     @PostMapping

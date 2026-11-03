@@ -33,8 +33,9 @@ public class PlatformRoleService {
         this.jdbc = jdbc;
     }
 
+    /** members：成员账号（用户名），列表直接展示，避免只看到一个数字 */
     public record RoleDto(long id, String code, String name, boolean enabled, int memberCount,
-                          List<String> permissions) {
+                          List<String> members, List<String> permissions) {
     }
 
     public record PermissionDto(String resourceKey, String name, String parentKey) {
@@ -54,7 +55,7 @@ public class PlatformRoleService {
                 ORDER BY r.Id
                 """, (rs, i) -> new RoleDto(rs.getLong("Id"), rs.getString("Code"),
                 rs.getString("Name"), rs.getBoolean("IsEnabled"), rs.getInt("MemberCount"),
-                new ArrayList<>()), PLATFORM_TENANT_ID);
+                new ArrayList<>(), new ArrayList<>()), PLATFORM_TENANT_ID);
         Map<Long, RoleDto> byId = new LinkedHashMap<>();
         roles.forEach(r -> byId.put(r.id(), r));
         jdbc.query("""
@@ -68,6 +69,19 @@ public class PlatformRoleService {
                     RoleDto role = byId.get(rs.getLong("RoleId"));
                     if (role != null) {
                         role.permissions().add(rs.getString("ResourceKey"));
+                    }
+                }, PLATFORM_TENANT_ID);
+        jdbc.query("""
+                SELECT ur.RoleId, u.UserName
+                FROM plat.UserRole ur
+                JOIN plat.[User] u ON u.Id = ur.UserId AND u.IsDeleted = 0
+                JOIN plat.Role r ON r.Id = ur.RoleId
+                WHERE r.TenantId = ?
+                ORDER BY u.UserName
+                """, rs -> {
+                    RoleDto role = byId.get(rs.getLong("RoleId"));
+                    if (role != null) {
+                        role.members().add(rs.getString("UserName"));
                     }
                 }, PLATFORM_TENANT_ID);
         return new ArrayList<>(byId.values());
