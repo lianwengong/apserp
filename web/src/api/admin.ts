@@ -6,9 +6,27 @@ export interface TenantDto {
   name: string
   shortName: string | null
   industry: string | null
+  contact: string | null
+  phone: string | null
+  maxUsers: number | null
+  remark: string | null
   enabled: boolean
   createdAt: string | null
   expireAt: string | null
+  /** 租户管理员（首个启用中的 SYSADMIN），口令在本模块维护 */
+  adminUserId: number | null
+  adminUserName: string | null
+}
+
+export interface TenantUpdateBody {
+  name: string
+  shortName?: string | null
+  industry?: string | null
+  contact?: string | null
+  phone?: string | null
+  maxUsers?: number | null
+  remark?: string | null
+  expireAt?: string | null
 }
 
 /** 平台管理员：跨租户租户列表（只读）。 */
@@ -39,6 +57,22 @@ export interface TenantCreateResult {
 /** 开通租户：建租户 + 克隆模板元数据 + 建租户管理员（仅平台登录）。 */
 export function createTenant(body: TenantCreateBody): Promise<TenantCreateResult> {
   return request<TenantCreateResult>('/api/admin/tenants', { method: 'POST', body })
+}
+
+/** 编辑租户资料：编码是唯一标识，不可修改；其余字段都可改。 */
+export function updateTenant(tenantId: number, body: TenantUpdateBody): Promise<void> {
+  return request<void>(`/api/admin/tenants/${tenantId}`, { method: 'PUT', body })
+}
+
+/** 维护租户管理员口令（编码不可改，管理员口令在这里重置）。 */
+export function resetTenantAdminPassword(
+  tenantId: number,
+  newPassword: string
+): Promise<{ userName: string }> {
+  return request<{ userName: string }>(`/api/admin/tenants/${tenantId}/admin-password`, {
+    method: 'POST',
+    body: { newPassword }
+  })
 }
 
 /** 停用 / 启用租户（仅平台登录）。 */

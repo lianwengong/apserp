@@ -41,6 +41,9 @@ public class AdminTenantController {
     public record EnabledRequest(boolean enabled) {
     }
 
+    public record AdminPasswordRequest(String newPassword) {
+    }
+
     /**
      * 立即执行一次到期扫描（运维手动触发，正常由每天 01:10 的定时任务执行）。
      * 返回本次停用的租户数。
@@ -67,5 +70,21 @@ public class AdminTenantController {
                                       @RequestBody EnabledRequest req) {
         tenantAdmin.setEnabled(tenantId, req.enabled());
         return ApiResult.ok(null);
+    }
+
+    /** 编辑租户资料（编码不可改）。 */
+    @PutMapping("/{tenantId}")
+    public ApiResult<Void> update(@PathVariable long tenantId,
+                                  @RequestBody TenantAdminService.UpdateRequest req) {
+        tenantAdmin.update(tenantId, req);
+        return ApiResult.ok(null);
+    }
+
+    /** 维护租户管理员口令，返回被重置的管理员用户名。 */
+    @PostMapping("/{tenantId}/admin-password")
+    public ApiResult<Map<String, String>> resetAdminPassword(
+            @PathVariable long tenantId, @RequestBody AdminPasswordRequest req) {
+        String userName = tenantAdmin.resetTenantAdminPassword(tenantId, req.newPassword());
+        return ApiResult.ok(Map.of("userName", userName));
     }
 }

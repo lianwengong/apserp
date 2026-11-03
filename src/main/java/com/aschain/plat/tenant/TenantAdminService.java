@@ -48,8 +48,113 @@ public class TenantAdminService {
                                 String expireAt) {
     }
 
+    /**
+     * 编辑租户：编码是库内唯一标识，<b>不可修改</b>；其余展示/联系/到期/上限字段都可改。
+     * 请求里即使带了 code 也会被忽略，避免前端误改。
+     */
+    public record UpdateRequest(String name, String shortName, String industry, String contact,
+                                String phone, Integer maxUsers, String remark, String expireAt) {
+    }
+
     public record CreateResult(long tenantId, String code, String name, String adminUserName,
                                Map<String, Long> provisioned) {
+    }
+
+    /** 修改租户资料（编码除外）。 */
+    @Transactional
+    public void update(long tenantId, UpdateRequest req) {
+        requirePlatformScope();
+        Map<String, Object> tenant = requireBusinessTenant(tenantId);
+
+        String name = req.name() == null ? "" : req.name().trim();
+        if (name.isEmpty()) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "租户名称不能为空");
+        }
+        if (name.length() > 200) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "租户名称不能超过 200 字");
+        }
+        if (req.shortName() != null && req.shortName().trim().length() > 100) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "简称不能超过 100 字");
+        }
+        if (req.industry() != null && req.industry().trim().length() > 100) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "行业不能超过 100 字");
+        }
+        if (req.contact() != null && req.contact().trim().length() > 100) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "联系人不能超过 100 字");
+        }
+        if (req.phone() != null && req.phone().trim().length() > 30) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "联系电话不能超过 30 字");
+        }
+        if (req.remark() != null && req.remark().trim().length() > 1000) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "备注不能超过 1000 字");
+        }
+        if (req.maxUsers() != null && req.maxUsers() < 0) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "用户上限不能为负数");
+        }
+        jdbc.update("""
+                UPDATE plat.Tenant
+                SET Name = ?, ShortName = ?, Industry = ?, Contact = ?, Phone = ?,
+                    MaxUsers = ?, Remark = ?,
+                    ExpireAt = CASE WHEN ? IS NULL THEN NULL ELSE TRY_CONVERT(datetime2, ?) END,
+                    ModifiedAt = sysutcdatetime()
+                WHERE Id = ? AND IsDeleted = 0
+                """,
+                name, blankToNull(req.shortName()), blankToNull(req.industry()),
+                blankToNull(req.contact()), blankToNull(req.phone()),
+                req.maxUsers(), blankToNull(req.remark()),
+                blankToNull(req.expireAt()), blankToNull(req.expireAt()), tenantId);
+        log.info("tenant_updated tenant={} code={}", tenantId, tenant.get("Code"));
+    }
+
+    /**
+     * 维护租户管理员口令：找该租户首个启用中的 SYSADMIN 账号重置，
+     * 并强制对方下次登录改密、清失败计数与锁定。
+     */
+    @Transactional
+    public String resetTenantAdminPassword(long tenantId, String newPassword) {
+        requirePlatformScope();
+        requireBusinessTenant(tenantId);
+        validatePassword(newPassword);
+
+        List<Map<String, Object>> admins = jdbc.queryForList("""
+                SELECT TOP 1 u.Id, u.UserName
+                FROM plat.[User] u
+                JOIN plat.UserRole ur ON ur.UserId = u.Id
+                JOIN plat.Role r ON r.Id = ur.RoleId AND r.Code = 'SYSADMIN'
+                WHERE u.TenantId = ? AND u.IsDeleted = 0
+                ORDER BY u.IsEnabled DESC, u.Id
+                """, tenantId);
+        if (admins.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_FOUND,
+                    "该租户没有管理员账号（SYSADMIN），请先在用户与权限里创建");
+        }
+        long userId = ((Number) admins.get(0).get("Id")).longValue();
+        String userName = String.valueOf(admins.get(0).get("UserName"));
+        String salt = hasher.newSalt();
+        String hash = hasher.hash(newPassword, salt);
+        jdbc.update("""
+                UPDATE plat.[User]
+                SET PasswordHash = ?, PasswordSalt = ?, PasswordUpdatedAt = sysutcdatetime(),
+                    MustChangePwd = 1, FailCount = 0, LockedUntil = NULL, ModifiedAt = sysutcdatetime()
+                WHERE Id = ?
+                """, hash, salt, userId);
+        log.info("tenant_admin_password_reset tenant={} user={}", tenantId, userName);
+        return userName;
+    }
+
+    /** 平台租户只承载平台账号，不允许当业务租户编辑。 */
+    private Map<String, Object> requireBusinessTenant(long tenantId) {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT Id, Code, IsPlatformTenant FROM plat.Tenant WHERE Id = ? AND IsDeleted = 0",
+                tenantId);
+        if (rows.isEmpty()) {
+            throw new ApiException(ErrorCode.NOT_FOUND, "租户不存在");
+        }
+        if (Boolean.TRUE.equals(rows.get(0).get("IsPlatformTenant"))) {
+            throw new ApiException(ErrorCode.BAD_REQUEST,
+                    "平台租户只承载平台账号，不支持编辑");
+        }
+        return rows.get(0);
     }
 
     /**

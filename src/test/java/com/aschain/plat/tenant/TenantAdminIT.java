@@ -189,6 +189,62 @@ class TenantAdminIT {
     }
 
     @Test
+    @DisplayName("编辑租户：除编码外都能改，编码被忽略")
+    void update_tenant_fields_except_code() {
+        TenantAdminService.CreateResult created = tenantAdmin.create(
+                new TenantAdminService.CreateRequest(code, "编辑前名称", null, null, 1, "tadmin",
+                        ADMIN_PASSWORD, null));
+
+        tenantAdmin.update(created.tenantId(), new TenantAdminService.UpdateRequest(
+                "编辑后名称", "新简称", "零售", "张三", "13800000000", 50, "改过的备注",
+                "2027-12-31T23:59:59"));
+
+        var tenant = jdbc.queryForMap("""
+                SELECT Code, Name, ShortName, Industry, Contact, Phone, MaxUsers, Remark, ExpireAt
+                FROM plat.Tenant WHERE Id = ?
+                """, created.tenantId());
+        assertThat(tenant.get("Code")).isEqualTo(code);
+        assertThat(tenant.get("Name")).isEqualTo("编辑后名称");
+        assertThat(tenant.get("ShortName")).isEqualTo("新简称");
+        assertThat(tenant.get("Industry")).isEqualTo("零售");
+        assertThat(tenant.get("Contact")).isEqualTo("张三");
+        assertThat(tenant.get("Phone")).isEqualTo("13800000000");
+        assertThat(((Number) tenant.get("MaxUsers")).intValue()).isEqualTo(50);
+        assertThat(tenant.get("Remark")).isEqualTo("改过的备注");
+        assertThat(tenant.get("ExpireAt")).isNotNull();
+
+        // 名称不能为空；平台租户不能编辑
+        assertThatThrownBy(() -> tenantAdmin.update(created.tenantId(),
+                new TenantAdminService.UpdateRequest("  ", null, null, null, null, null, null, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("不能为空");
+        assertThatThrownBy(() -> tenantAdmin.update(0L,
+                new TenantAdminService.UpdateRequest("平台", null, null, null, null, null, null, null)))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("平台租户");
+    }
+
+    @Test
+    @DisplayName("租户管理员口令在租户管理里维护：重置后新口令可登录且强制改密")
+    void reset_tenant_admin_password() {
+        TenantAdminService.CreateResult created = tenantAdmin.create(
+                new TenantAdminService.CreateRequest(code, "改密测试租户", null, null, 1, "tadmin",
+                        ADMIN_PASSWORD, null));
+
+        String userName = tenantAdmin.resetTenantAdminPassword(created.tenantId(), "Changed@2026a");
+        assertThat(userName).isEqualTo("tadmin");
+
+        platformContext();
+        var login = authService.login(code, "tadmin", "Changed@2026a");
+        assertThat(login.tenantId()).isEqualTo(created.tenantId());
+        assertThat(login.mustChangePassword()).isTrue();
+
+        // 旧口令失效
+        assertThatThrownBy(() -> authService.login(code, "tadmin", ADMIN_PASSWORD))
+                .isInstanceOf(ApiException.class);
+    }
+
+    @Test
     @DisplayName("租户会话不能开通/停用租户")
     void tenant_session_cannot_manage_tenants() {
         AuthService.LoginResult business = authService.login("T001", "admin", PASSWORD);
