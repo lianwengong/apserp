@@ -31,12 +31,18 @@ public class AuthService {
     private static final int MAX_FAIL = 5;
     private static final int LOCK_MINUTES = 15;
 
+    /**
+     * 租户登录按「租户名称或编码」解析：用户填的是名字（例如「示例商贸有限公司」），
+     * 老脚本与文档里用的是编码（T001），两者都认。同名租户由唯一约束挡住。
+     */
     private static final String SQL_TENANT =
-            "SELECT Id, IsEnabled FROM plat.Tenant WHERE Code = ? AND IsDeleted = 0";
+            "SELECT Id, IsEnabled FROM plat.Tenant "
+            + "WHERE (Code = ? OR Name = ?) AND IsDeleted = 0";
 
     private static final String SQL_USER = """
             SELECT u.Id, u.UserName, u.PasswordHash, u.PasswordSalt, u.DisplayName,
-                   u.IsEnabled, u.LockedUntil, u.MustChangePwd,
+                   u.IsEnabled, u.LockedUntil, u.MustChangePwd, u.TenantId,
+                   u.IsPlatformAccount,
                    -- 注意：RoleType=1 只是"内部角色"（仓管/采购/财务都是 1），
                    -- 平台管理员必须按角色编码 SYSADMIN 判定，否则所有人都会拿到 adm=true
                    CASE WHEN u.UserType = 1 AND EXISTS (
@@ -46,6 +52,18 @@ public class AuthService {
                    ) THEN 1 ELSE 0 END AS IsAdmin
             FROM plat.[User] u
             WHERE u.TenantId = ? AND u.UserName = ? AND u.IsDeleted = 0
+            """;
+
+    /**
+     * 平台登录：没有租户名，按「平台账号」标记跨租户找人。
+     * 运行时依赖平台作用域把 RLS 放开，否则 plat.User 是 fail-closed 空的。
+     */
+    private static final String SQL_PLATFORM_USER = """
+            SELECT u.Id, u.UserName, u.PasswordHash, u.PasswordSalt, u.DisplayName,
+                   u.IsEnabled, u.LockedUntil, u.MustChangePwd, u.TenantId,
+                   u.IsPlatformAccount, 1 AS IsAdmin
+            FROM plat.[User] u
+            WHERE u.IsPlatformAccount = 1 AND u.UserName = ? AND u.IsDeleted = 0
             """;
 
     private static final String SQL_FAIL =
@@ -76,9 +94,9 @@ public class AuthService {
                               boolean mustChangePassword, int appType) {
     }
 
-    private record UserRow(long id, String userName, String hash, String salt, String displayName,
-                           boolean enabled, LocalDateTime lockedUntil, boolean mustChange,
-                           boolean admin) {
+    private record UserRow(long id, long tenantId, String userName, String hash, String salt,
+                           String displayName, boolean enabled, LocalDateTime lockedUntil,
+                           boolean mustChange, boolean admin, boolean platformAccount) {
     }
 
     /**
@@ -86,6 +104,48 @@ public class AuthService {
      */
     public LoginResult login(String tenantCode, String userName, String rawPassword) {
         return login(tenantCode, userName, rawPassword, TenantContext.APP_BUSINESS);
+    }
+
+    /**
+     * 平台登录：<b>没有租户名</b>，只凭平台账号（{@code plat.User.IsPlatformAccount=1}）登录，
+     * 拿到的是平台作用域令牌——可以管理所有租户。
+     *
+     * <p>为什么不能复用租户登录：{@code plat.User} 受 RLS 保护，没有租户上下文时是空集；
+     * 这里先把平台作用域打开（BypassRls=1），跨租户按用户名找平台账号，校验后再签发令牌。
+     * 令牌里带 {@code pf=true}，{@code JwtAuthFilter} 会把它还原成平台作用域。</p>
+     */
+    public LoginResult loginPlatform(String userName, String rawPassword) {
+        if (userName == null || rawPassword == null) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "账号、口令不能为空");
+        }
+        TenantContext.set(null, null, true, TenantContext.APP_PLATFORM, true);
+        try {
+            List<UserRow> rows = jdbc.query(SQL_PLATFORM_USER,
+                    (rs, i) -> mapUser(rs),
+                    userName);
+            if (rows.isEmpty()) {
+                throw new ApiException(ErrorCode.UNAUTHORIZED, "平台账号或口令不正确");
+            }
+            UserRow user = rows.get(0);
+            if (!user.enabled()) {
+                throw new ApiException(ErrorCode.FORBIDDEN, "账号已停用");
+            }
+            if (user.lockedUntil() != null && user.lockedUntil().isAfter(LocalDateTime.now())) {
+                throw new ApiException(ErrorCode.FORBIDDEN, "账号已锁定，请稍后再试");
+            }
+            if (!hasher.matches(rawPassword, user.hash(), user.salt())) {
+                recordFailure(user.id());
+                throw new ApiException(ErrorCode.UNAUTHORIZED, "平台账号或口令不正确");
+            }
+            recordSuccess(user.id());
+            String token = jwtService.issue(user.id(), (int) user.tenantId(), user.userName(),
+                    true, user.mustChange(), TenantContext.APP_PLATFORM, true);
+            log.info("platform_login_ok homeTenant={} user={}", user.tenantId(), user.userName());
+            return new LoginResult(token, user.id(), (int) user.tenantId(), user.displayName(),
+                    user.mustChange(), TenantContext.APP_PLATFORM);
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     /**
@@ -104,7 +164,7 @@ public class AuthService {
             throw new ApiException(ErrorCode.BAD_REQUEST, "入口只能是 1（平台管理）或 2（业务管理）");
         }
 
-        List<Map<String, Object>> tenants = jdbc.queryForList(SQL_TENANT, tenantCode);
+        List<Map<String, Object>> tenants = jdbc.queryForList(SQL_TENANT, tenantCode, tenantCode);
         if (tenants.isEmpty()) {
             throw new ApiException(ErrorCode.UNAUTHORIZED, "租户或账号或口令不正确");
         }
@@ -203,14 +263,17 @@ public class AuthService {
     }
 
     private UserRow findUser(int tenantId, String userName) {
-        List<UserRow> rows = jdbc.query(SQL_USER,
-                (rs, i) -> new UserRow(rs.getLong("Id"), rs.getString("UserName"),
-                        rs.getString("PasswordHash"), rs.getString("PasswordSalt"),
-                        rs.getString("DisplayName"), rs.getBoolean("IsEnabled"),
-                        rs.getObject("LockedUntil", LocalDateTime.class),
-                        rs.getBoolean("MustChangePwd"), rs.getInt("IsAdmin") == 1),
-                tenantId, userName);
+        List<UserRow> rows = jdbc.query(SQL_USER, (rs, i) -> mapUser(rs), tenantId, userName);
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private static UserRow mapUser(java.sql.ResultSet rs) throws java.sql.SQLException {
+        return new UserRow(rs.getLong("Id"), rs.getLong("TenantId"), rs.getString("UserName"),
+                rs.getString("PasswordHash"), rs.getString("PasswordSalt"),
+                rs.getString("DisplayName"), rs.getBoolean("IsEnabled"),
+                rs.getObject("LockedUntil", LocalDateTime.class),
+                rs.getBoolean("MustChangePwd"), rs.getInt("IsAdmin") == 1,
+                rs.getBoolean("IsPlatformAccount"));
     }
 
     private void recordFailure(long userId) {

@@ -28,8 +28,9 @@ public class TenantProvisionService {
     }
 
     public Map<String, Long> provision(int templateTenantId, int newTenantId) {
-        if (!TenantContext.isPlatformAdmin()) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "只有平台管理员可以开通租户");
+        // 开通租户是跨租户操作：必须来自平台登录（平台作用域），租户管理员不行
+        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "只有平台管理员可以开通租户，请使用平台登录");
         }
         if (templateTenantId == newTenantId) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "模板租户与新租户不能相同");

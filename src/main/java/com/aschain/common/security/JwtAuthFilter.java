@@ -56,7 +56,9 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             Object appClaim = claims.get(JwtService.CLAIM_APP);
             int appType = appClaim instanceof Number number
                     ? number.intValue() : TenantContext.APP_BUSINESS;
-            TenantContext.set((long) tenantId, userId, admin, appType);
+            // 平台作用域：只有平台登录换来的令牌带 pf=true，允许跨租户读写
+            boolean platformScope = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_PLATFORM));
+            TenantContext.set((long) tenantId, userId, admin, appType, platformScope);
             request.setAttribute(ATTR_MUST_CHANGE, mustChange);
         } else if (allowHeaderAuth && request.getHeader("X-Tenant-Id") != null) {
             TenantContext.set(Long.valueOf(request.getHeader("X-Tenant-Id")),

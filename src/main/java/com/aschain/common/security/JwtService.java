@@ -32,6 +32,8 @@ public class JwtService {
     public static final String CLAIM_MUST_CHANGE = "mpwd";
     /** 会话入口：1 平台管理 / 2 业务管理（登录时选择，菜单与首页按它过滤） */
     public static final String CLAIM_APP = "app";
+    /** 平台作用域：跨租户读写（只有平台登录换来的令牌带这个声明） */
+    public static final String CLAIM_PLATFORM = "pf";
 
     private final SecretKey key;
     private final Duration ttl;
@@ -55,6 +57,15 @@ public class JwtService {
 
     public String issue(long userId, int tenantId, String userName, boolean platformAdmin,
                         boolean mustChangePassword, int appType) {
+        return issue(userId, tenantId, userName, platformAdmin, mustChangePassword, appType, false);
+    }
+
+    /**
+     * @param platformScope 平台登录专用：为真时令牌带 {@code pf} 声明，
+     *                      数据源放开 RLS，允许跨租户管理（租户登录永远为 false）
+     */
+    public String issue(long userId, int tenantId, String userName, boolean platformAdmin,
+                        boolean mustChangePassword, int appType, boolean platformScope) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(Long.toString(userId))
@@ -64,7 +75,8 @@ public class JwtService {
                         CLAIM_NAME, userName,
                         CLAIM_ADMIN, platformAdmin,
                         CLAIM_MUST_CHANGE, mustChangePassword,
-                        CLAIM_APP, appType))
+                        CLAIM_APP, appType,
+                        CLAIM_PLATFORM, platformScope))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key)

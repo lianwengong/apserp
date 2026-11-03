@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Lock, OfficeBuilding, User } from '@element-plus/icons-vue'
-import { login } from '../api/auth'
+import { Key, Lock, OfficeBuilding, User } from '@element-plus/icons-vue'
+import { login, platformLogin } from '../api/auth'
 import { session } from '../stores/session'
 import { appearance } from '../stores/appearance'
 
@@ -13,8 +13,8 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const error = ref('')
-/** 入口：1 平台管理 / 2 业务管理 */
-const entrance = ref<number>(Number(route.query.app) === 1 ? 1 : 2)
+/** 登录方式：tenant 租户登录（默认）/ platform 平台登录（无租户名） */
+const mode = ref<'tenant' | 'platform'>(String(route.query.app) === '1' ? 'platform' : 'tenant')
 
 const form = reactive({
   tenantCode: session.lastTenantCode(),
@@ -23,12 +23,19 @@ const form = reactive({
 })
 
 const rules: FormRules = {
-  tenantCode: [{ required: true, message: '请输入租户编码', trigger: 'blur' }],
+  tenantCode: [{ required: true, message: '请输入租户名称', trigger: 'blur' }],
   userName: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入口令', trigger: 'blur' }]
 }
 
 const isDev = import.meta.env.DEV
+const isPlatform = computed(() => mode.value === 'platform')
+
+function switchMode(next: 'tenant' | 'platform'): void {
+  mode.value = next
+  error.value = ''
+  form.password = ''
+}
 
 async function submit(): Promise<void> {
   if (loading.value) return
@@ -38,13 +45,16 @@ async function submit(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    const result = await login({
-      tenantCode: form.tenantCode.trim(),
-      userName: form.userName.trim(),
-      password: form.password,
-      appType: entrance.value
-    })
-    session.setLogin(result, form.tenantCode.trim())
+    // 两种登录走两个接口：平台登录不带租户名，令牌带平台作用域（可管理所有租户）
+    const result = isPlatform.value
+      ? await platformLogin({ userName: form.userName.trim(), password: form.password })
+      : await login({
+          tenantCode: form.tenantCode.trim(),
+          userName: form.userName.trim(),
+          password: form.password,
+          appType: 2
+        })
+    session.setLogin(result, isPlatform.value ? '' : form.tenantCode.trim())
     await session.loadMe()
     await appearance.loadRemote()
     const home = result.appType === 1 ? '/platform' : '/'
@@ -86,30 +96,11 @@ async function submit(): Promise<void> {
     <section class="form-panel">
       <div class="form-card">
         <header class="form-head">
-          <h2>登录</h2>
-          <p class="muted">先选择入口，再使用租户账号进入</p>
+          <h2>{{ isPlatform ? '平台登录' : '登录' }}</h2>
+          <p class="muted">
+            {{ isPlatform ? '平台账号不绑定租户，可管理所有租户' : '使用租户账号进入业务管理' }}
+          </p>
         </header>
-
-        <div class="entrance-switch">
-          <button
-            type="button"
-            class="entrance-card"
-            :class="{ active: entrance === 1 }"
-            @click="entrance = 1"
-          >
-            <span class="entrance-title">平台管理</span>
-            <span class="entrance-hint">租户、组织、元数据、发布与监控</span>
-          </button>
-          <button
-            type="button"
-            class="entrance-card"
-            :class="{ active: entrance === 2 }"
-            @click="entrance = 2"
-          >
-            <span class="entrance-title">业务管理</span>
-            <span class="entrance-hint">主数据、采购、销售、库存等日常业务</span>
-          </button>
-        </div>
 
         <el-alert
           v-if="error"
@@ -128,10 +119,10 @@ async function submit(): Promise<void> {
           size="large"
           @submit.prevent="submit"
         >
-          <el-form-item label="租户编码" prop="tenantCode">
+          <el-form-item v-if="!isPlatform" label="租户名称" prop="tenantCode">
             <el-input
               v-model="form.tenantCode"
-              placeholder="如 T001"
+              placeholder="如 T001 / 示例商贸有限公司"
               :prefix-icon="OfficeBuilding"
               autocomplete="organization"
             />
@@ -157,12 +148,31 @@ async function submit(): Promise<void> {
           </el-form-item>
 
           <el-button type="primary" class="submit" :loading="loading" native-type="submit">
-            进入{{ entrance === 1 ? '平台管理' : '业务管理' }}
+            {{ isPlatform ? '进入平台管理' : '进入业务管理' }}
           </el-button>
         </el-form>
 
+        <!-- 平台登录入口：默认收起，放在租户登录下面，避免抢占普通用户的注意力 -->
+        <button
+          v-if="!isPlatform"
+          type="button"
+          class="platform-hotspot"
+          @click="switchMode('platform')"
+        >
+          <el-icon><Key /></el-icon>
+          <span>平台管理员登录</span>
+          <span class="hotspot-hint">无需租户名，可管理所有租户</span>
+        </button>
+        <button v-else type="button" class="platform-hotspot is-back" @click="switchMode('tenant')">
+          <el-icon><OfficeBuilding /></el-icon>
+          <span>返回租户登录</span>
+        </button>
+
         <p v-if="isDev" class="dev-hint">
-          开发环境演示账号：<code>T001 / admin / AsChain@2026</code>
+          <template v-if="isPlatform">
+            开发环境平台账号：<code>admin / AsChain@2026</code>
+          </template>
+          <template v-else>开发环境演示账号：<code>T001 / admin / AsChain@2026</code></template>
         </p>
         <p class="legal muted">登录即表示同意内部系统使用规范</p>
       </div>
@@ -171,6 +181,30 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+/* 平台登录热区：默认收在租户登录下面，不抢普通用户注意力 */
+.platform-hotspot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.platform-hotspot:hover {
+  border-color: var(--brand-400);
+  color: var(--brand-700);
+  background: var(--brand-50);
+}
+.platform-hotspot.is-back { justify-content: center; border-style: solid; }
+.hotspot-hint { margin-left: auto; font-size: 11px; color: var(--muted); }
 .form-head h2 { margin: 0; font-size: 20px; }
 
 /* 入口选择：两张卡片，登录前先定身份 */

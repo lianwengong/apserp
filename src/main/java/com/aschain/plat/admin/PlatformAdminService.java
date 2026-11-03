@@ -46,9 +46,15 @@ public class PlatformAdminService {
                         rs.getObject("ExpireAt", LocalDateTime.class)));
     }
 
+    /**
+     * 平台管理接口的准入：必须是平台登录换来的会话（平台作用域），
+     * 不能只靠「这个账号在自己租户里是 SYSADMIN」——那样租户管理员就能列出
+     * 所有租户、跨租户操作，等于把租户隔离开了个后门。
+     */
     private void requirePlatformAdmin() {
-        if (!TenantContext.isPlatformAdmin()) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "仅平台管理员可访问平台管理");
+        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+            throw new ApiException(ErrorCode.FORBIDDEN,
+                    "仅平台管理员可访问平台管理，请使用平台登录");
         }
     }
 }

@@ -12,15 +12,25 @@
 
 ## 2. 登录时怎么分
 
-登录页有两个入口卡片（平台管理 / 业务管理），点一个再输账号口令。
+登录页默认是**租户登录**：
 
-- 请求体带 `appType`：`POST /api/auth/login {tenantCode,userName,password,appType}`；
-- 服务端校验入口权限：
-  - **平台入口**：账号是 SYSADMIN，或持有任一 `DESIGN:` 权限点；否则 403「该账号没有平台管理入口权限」；
-  - **业务入口**：通过认证即可（业务菜单本身仍按 `MOD:/FUN:/DATA:` 权限过滤）；
-- 令牌里带入口声明 `app`，之后所有请求都按这个入口工作：
-  - `/api/menu/tree` 只返回该入口的菜单；
-  - 前端路由按 `meta.app` 守卫，跨入口访问会被弹回本入口首页。
+- 字段：租户名称（填名称或编码都认，如 `示例商贸有限公司` / `T001`）+ 用户名 + 口令；
+- 接口 `POST /api/auth/login`，令牌入口 `app=2`（业务管理），**不带**平台作用域；
+- 业务会话调 `/api/admin/**`、开通租户等跨租户接口一律 403。
+
+租户登录按钮下面有一个小热区「平台管理员登录」：
+
+- 点开后是**平台登录**：只有用户名 + 口令，**没有租户名**；
+- 接口 `POST /api/auth/platform-login`，只认 `plat.User.IsPlatformAccount=1` 的账号；
+- 登录时以平台作用域（`BypassRls=1`）跨租户找人，令牌带 `app=1` + `pf=true`；
+- 因此平台登录能列出并管理**所有租户**（`/api/admin/tenants` 等）。
+
+**平台作用域是硬边界**：租户登录的管理员（SYSADMIN）调平台接口会 403「仅平台管理员可访问平台管理，请使用平台登录」——「我在自己租户里是管理员」不等于「我能管所有租户」。
+
+之后所有请求都按令牌里的入口工作：
+
+- `/api/menu/tree` 只返回该入口的菜单；
+- 前端路由按 `meta.app` 守卫，跨入口访问会被弹回本入口首页。
 
 **入口不由前端参数决定**：菜单接口取令牌里的 `app`，否则改个 query 就能看到另一侧菜单，隔离等于没做。
 
@@ -36,7 +46,7 @@
 
 ## 4. 切换入口
 
-**必须重新登录**（令牌里固定了入口）。用户菜单里有「切换到业务管理 / 平台管理」，点了会清会话并回到登录页、自动选中目标入口。
+**必须重新登录**（令牌里固定了入口与平台作用域）。用户菜单里有「切换到业务管理 / 平台管理」，点了会清会话并回到登录页：切平台方向会直接进入平台登录表单。
 
 不做「同一会话内两个入口来回切」：那等于把两个入口的权限边界做成摆设。
 
@@ -44,12 +54,14 @@
 
 | 层 | 位置 |
 |---|---|
-| 库 | `V51__102_menu_app_type.sql`（`Menu.AppType` + 索引 + 回填） |
-| 后端 | `TenantContext.APP_PLATFORM/APP_BUSINESS`、`JwtService.CLAIM_APP`、`AuthService.login(...,appType)`、`MenuService.tree(terminal, appType)`、`MenuController`（取令牌入口） |
-| 前端 | `LoginView`（入口卡片）、`session.state.appType`（localStorage `aschain.app`）、`router` 的 `meta.app` 守卫、`MainLayout` 侧边栏按入口渲染、用户菜单「切换入口」 |
+| 库 | `V51__102_menu_app_type.sql`（`Menu.AppType` + 索引 + 回填）、`V53__104_platform_account.sql`（`User.IsPlatformAccount`） |
+| 后端 | `TenantContext.APP_PLATFORM/APP_BUSINESS` + `isPlatformScope()`、`JwtService.CLAIM_APP/CLAIM_PLATFORM`、`AuthService.login(...,appType)` / `loginPlatform(user, pwd)`、`PlatformAdminService.requirePlatformAdmin()`（要求平台作用域）、`MenuService.tree(terminal, appType)`、`MenuController`（取令牌入口） |
+| 前端 | `LoginView`（默认租户登录 + 平台登录热区）、`session.state.appType`（localStorage `aschain.app`）、`router` 的 `meta.app` 守卫、`MainLayout` 侧边栏按入口渲染、用户菜单「切换入口」 |
 
 ## 6. 边界
 
 - 入口只决定「看到哪一侧的菜单与页面」，不替代权限点：平台入口里仍按 `DESIGN:*` 控制，业务入口仍按 `MOD/FUN/DATA` 控制；
-- 老令牌没有 `app` 声明时按**业务管理**处理（向后兼容，刷新即失效重建）；
-- 定时任务/后台线程没有入口，`TenantContext.appType()` 默认业务管理。
+- 平台作用域 = 令牌 `pf=true`，只有平台登录会签发；`pf` 一旦出现，RLS 对这条连接全面放开，所以它只能来自 `IsPlatformAccount=1` 的账号；
+- 老令牌没有 `app` 声明时按**业务管理**处理、没有 `pf`（向后兼容，刷新即重建）；
+- 定时任务/后台线程没有入口，`TenantContext.appType()` 默认业务管理，且不带平台作用域；
+- 租户名称模糊匹配没做：填的名称必须与 `plat.Tenant.Name` 完全一致（或直接用编码）。
