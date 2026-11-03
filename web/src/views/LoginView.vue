@@ -5,6 +5,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { Key, Lock, OfficeBuilding, User } from '@element-plus/icons-vue'
 import { login, platformLogin } from '../api/auth'
 import { session } from '../stores/session'
+import { resetSessionCaches } from '../stores/reset'
 import { appearance } from '../stores/appearance'
 
 const route = useRoute()
@@ -55,6 +56,8 @@ async function submit(): Promise<void> {
           appType: 2
         })
     session.setLogin(result, isPlatform.value ? '' : form.tenantCode.trim())
+    // 新会话：清掉上一会话的菜单树与对象目录，否则侧边栏会少内容（刷新后才好）
+    resetSessionCaches()
     await session.loadMe()
     await appearance.loadRemote()
     const home = result.appType === 1 ? '/platform' : '/'

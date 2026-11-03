@@ -32,6 +32,7 @@ import type { TreeNavGroup } from '../components/treeNav'
 import { catalog } from '../stores/catalog'
 import { menus } from '../stores/menu'
 import { session } from '../stores/session'
+import { resetSessionCaches } from '../stores/reset'
 import { filterMenuTree, findMenuName } from '../utils/menu'
 import MenuTree from '../components/MenuTree.vue'
 import TreeNavRail from '../components/TreeNavRail.vue'
@@ -374,12 +375,14 @@ function onUserCommand(command: string): void {
   if (command === 'logout') {
     const redirect = route.fullPath
     session.logout()
+    resetSessionCaches()
     void router.replace({ name: 'login', query: { redirect } })
   }
   if (command === 'switch-app') {
     // 切换入口必须重新登录：令牌里带着入口，不能只改前端状态
     const target = isPlatformApp.value ? 2 : 1
     const path = session.switchApp(target)
+    resetSessionCaches()
     void router.replace(path)
   }
 }
