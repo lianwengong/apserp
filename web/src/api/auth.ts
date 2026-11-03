@@ -5,6 +5,8 @@ export interface LoginPayload {
   tenantCode: string
   userName: string
   password: string
+  /** 入口：1 平台管理 / 2 业务管理 */
+  appType: number
 }
 
 export function login(payload: LoginPayload): Promise<LoginResult> {

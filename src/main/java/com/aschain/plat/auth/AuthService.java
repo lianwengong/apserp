@@ -73,7 +73,7 @@ public class AuthService {
     }
 
     public record LoginResult(String token, long userId, int tenantId, String displayName,
-                              boolean mustChangePassword) {
+                              boolean mustChangePassword, int appType) {
     }
 
     private record UserRow(long id, String userName, String hash, String salt, String displayName,
@@ -82,13 +82,26 @@ public class AuthService {
     }
 
     /**
+     * 老签名：默认走业务管理入口（兼容既有调用与测试）。
+     */
+    public LoginResult login(String tenantCode, String userName, String rawPassword) {
+        return login(tenantCode, userName, rawPassword, TenantContext.APP_BUSINESS);
+    }
+
+    /**
      * 注意：这里**不能**加 {@code @Transactional}。事务会在方法体执行前就取走连接，
      * 那时租户上下文还没设置，RLS 会把用户表挡住，导致永远登录失败。
      * 因此改为自动提交、逐语句执行（失败计数与登录时间都是单语句更新）。
+     *
+     * @param appType 入口：1 平台管理 / 2 业务管理。平台入口要求账号具备平台管理能力
+     *                （SYSADMIN 角色标记或任一 DESIGN: 权限），否则拒绝登录该入口。
      */
-    public LoginResult login(String tenantCode, String userName, String rawPassword) {
+    public LoginResult login(String tenantCode, String userName, String rawPassword, int appType) {
         if (tenantCode == null || userName == null || rawPassword == null) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "租户、账号、口令不能为空");
+        }
+        if (appType != TenantContext.APP_PLATFORM && appType != TenantContext.APP_BUSINESS) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "入口只能是 1（平台管理）或 2（业务管理）");
         }
 
         List<Map<String, Object>> tenants = jdbc.queryForList(SQL_TENANT, tenantCode);
@@ -101,7 +114,7 @@ public class AuthService {
         }
 
         // 写入上下文后，后续查询才会被 RLS 放行
-        TenantContext.set((long) tenantId, null, false);
+        TenantContext.set((long) tenantId, null, false, appType);
         try {
             UserRow user = findUser(tenantId, userName);
             if (user == null) {
@@ -117,14 +130,34 @@ public class AuthService {
                 recordFailure(user.id());
                 throw new ApiException(ErrorCode.UNAUTHORIZED, "租户或账号或口令不正确");
             }
+            if (appType == TenantContext.APP_PLATFORM && !canUsePlatformApp(user.id(), user.admin())) {
+                throw new ApiException(ErrorCode.FORBIDDEN,
+                        "该账号没有平台管理入口权限，请从业务管理入口登录");
+            }
             recordSuccess(user.id());
             String token = jwtService.issue(user.id(), tenantId, user.userName(), user.admin(),
-                    user.mustChange());
-            log.info("login_ok tenant={} user={}", tenantId, user.userName());
-            return new LoginResult(token, user.id(), tenantId, user.displayName(), user.mustChange());
+                    user.mustChange(), appType);
+            log.info("login_ok tenant={} user={} app={}", tenantId, user.userName(), appType);
+            return new LoginResult(token, user.id(), tenantId, user.displayName(), user.mustChange(),
+                    appType);
         } finally {
             TenantContext.clear();
         }
+    }
+
+    /**
+     * 平台入口准入：SYSADMIN（user.admin）或持有任一 DESIGN: 权限点。
+     * 业务入口对通过认证的账号一律开放（业务菜单本身还会按权限过滤）。
+     */
+    private boolean canUsePlatformApp(long userId, boolean admin) {
+        if (admin) {
+            return true;
+        }
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.vw_Perm_UserFunction
+                WHERE UserId = ? AND ResourceKey LIKE 'DESIGN:%'
+                """, Integer.class, userId);
+        return count != null && count > 0;
     }
 
     /**
@@ -134,12 +167,18 @@ public class AuthService {
      */
     public LoginResult changePassword(String tenantCode, String userName, String oldPassword,
                                       String newPassword) {
+        return changePassword(tenantCode, userName, oldPassword, newPassword,
+                TenantContext.APP_BUSINESS);
+    }
+
+    public LoginResult changePassword(String tenantCode, String userName, String oldPassword,
+                                      String newPassword, int appType) {
         validatePasswordPolicy(newPassword);
         if (oldPassword != null && oldPassword.equals(newPassword)) {
             throw new ApiException(ErrorCode.BAD_REQUEST, "新口令不能与旧口令相同");
         }
-        LoginResult login = login(tenantCode, userName, oldPassword);
-        TenantContext.set((long) login.tenantId(), login.userId(), false);
+        LoginResult login = login(tenantCode, userName, oldPassword, appType);
+        TenantContext.set((long) login.tenantId(), login.userId(), false, appType);
         try {
             String salt = hasher.newSalt();
             String hash = hasher.hash(newPassword, salt);
@@ -149,7 +188,7 @@ public class AuthService {
             TenantContext.clear();
         }
         // 旧令牌仍带 mpwd=true，必须换发
-        return login(tenantCode, userName, newPassword);
+        return login(tenantCode, userName, newPassword, appType);
     }
 
     static void validatePasswordPolicy(String raw) {

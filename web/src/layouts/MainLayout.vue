@@ -18,6 +18,7 @@ import {
   Setting,
   Shop,
   ShoppingCart,
+  Switch,
   SwitchButton,
   Tickets,
   TrendCharts,
@@ -129,11 +130,24 @@ function leafNode(name: string, route: string, code: string): MenuNode {
   }
 }
 
-const workbenchNodes: MenuNode[] = [
-  leafNode('工作台首页', '/', 'home'),
-  leafNode('我的待办', '/todo', 'todo'),
-  leafNode('流程中心', '/workflow', 'workflow')
-]
+/** 当前入口：1 平台管理 / 2 业务管理（登录时选择，服务端菜单也按入口过滤） */
+const appType = computed(() => session.state.appType)
+const isPlatformApp = computed(() => appType.value === 1)
+
+/** 两个入口各自的工作台入口 */
+const workbenchNodes = computed<MenuNode[]>(() =>
+  isPlatformApp.value
+    ? [
+        leafNode('平台工作台', '/platform', 'platform-home'),
+        leafNode('平台概览', '/admin', 'platform-overview'),
+        leafNode('租户管理', '/admin/tenants', 'platform-tenants')
+      ]
+    : [
+        leafNode('业务工作台', '/', 'home'),
+        leafNode('我的待办', '/todo', 'todo'),
+        leafNode('流程中心', '/workflow', 'workflow')
+      ]
+)
 
 const treeGroups = computed<TreeNavGroup[]>(() => {
   const groups: TreeNavGroup[] = [
@@ -142,18 +156,22 @@ const treeGroups = computed<TreeNavGroup[]>(() => {
       title: '工作台',
       short: '工作台',
       icon: HomeFilled,
-      nodes: workbenchNodes
+      nodes: workbenchNodes.value
     }
   ]
 
-  if (platformRoot.value) {
-    groups.push({
-      key: 'platform',
-      title: platformRoot.value.name,
-      short: '平台',
-      icon: Setting,
-      nodes: platformRoot.value.children
-    })
+  if (isPlatformApp.value) {
+    // 平台入口：只放平台管理子树（服务端已按入口过滤，这里不会再混入业务菜单）
+    if (platformRoot.value) {
+      groups.push({
+        key: 'platform',
+        title: platformRoot.value.name,
+        short: '平台',
+        icon: Setting,
+        nodes: platformRoot.value.children
+      })
+    }
+    return groups.filter((group) => group.nodes.length > 0)
   }
 
   for (const root of menus.state.tree.filter((node) => node.code !== '90')) {
@@ -358,6 +376,12 @@ function onUserCommand(command: string): void {
     session.logout()
     void router.replace({ name: 'login', query: { redirect } })
   }
+  if (command === 'switch-app') {
+    // 切换入口必须重新登录：令牌里带着入口，不能只改前端状态
+    const target = isPlatformApp.value ? 2 : 1
+    const path = session.switchApp(target)
+    void router.replace(path)
+  }
 }
 </script>
 
@@ -385,32 +409,51 @@ function onUserCommand(command: string): void {
 
       <el-scrollbar class="menu-scroll">
         <nav v-if="!collapsed" class="menu">
+          <!-- 工作台入口：两个入口各一套，不共用 -->
           <div class="menu-group">
             <div class="menu-group-label">
               <el-icon><HomeFilled /></el-icon>
               <span>工作台</span>
             </div>
             <router-link
-              to="/todo"
+              v-if="isPlatformApp"
+              to="/platform"
               class="menu-item"
-              :class="{ active: route.path === '/todo' }"
+              :class="{ active: route.path === '/platform' }"
             >
               <span class="dot" />
-              <span class="item-name">我的待办</span>
-              <span class="item-code mono">todo</span>
+              <span class="item-name">平台工作台</span>
+              <span class="item-code mono">platform</span>
             </router-link>
-            <router-link
-              to="/workflow"
-              class="menu-item"
-              :class="{ active: route.path === '/workflow' }"
-            >
-              <span class="dot" />
-              <span class="item-name">流程中心</span>
-              <span class="item-code mono">flow</span>
-            </router-link>
+            <template v-else>
+              <router-link to="/" class="menu-item" :class="{ active: route.path === '/' }">
+                <span class="dot" />
+                <span class="item-name">业务工作台</span>
+                <span class="item-code mono">home</span>
+              </router-link>
+              <router-link
+                to="/todo"
+                class="menu-item"
+                :class="{ active: route.path === '/todo' }"
+              >
+                <span class="dot" />
+                <span class="item-name">我的待办</span>
+                <span class="item-code mono">todo</span>
+              </router-link>
+              <router-link
+                to="/workflow"
+                class="menu-item"
+                :class="{ active: route.path === '/workflow' }"
+              >
+                <span class="dot" />
+                <span class="item-name">流程中心</span>
+                <span class="item-code mono">flow</span>
+              </router-link>
+            </template>
           </div>
 
-          <div v-if="platformRoot" class="menu-group">
+          <!-- 平台入口：只渲染平台管理子树 -->
+          <div v-if="isPlatformApp && platformRoot" class="menu-group">
             <div class="menu-group-label">
               <el-icon><Setting /></el-icon>
               <span>平台管理</span>
@@ -423,7 +466,8 @@ function onUserCommand(command: string): void {
             />
           </div>
 
-          <div class="menu-group">
+          <!-- 业务入口：业务菜单 + 数据对象 -->
+          <div v-if="!isPlatformApp" class="menu-group">
             <div class="menu-group-label">
               <el-icon><Grid /></el-icon>
               <span>业务菜单</span>
@@ -454,28 +498,30 @@ function onUserCommand(command: string): void {
             </div>
           </div>
 
-          <div v-for="group in groups" :key="group.code" class="menu-group">
-            <div class="menu-group-label">
-              <el-icon><component :is="group.icon" /></el-icon>
-              <span>{{ group.label }}</span>
+          <template v-if="!isPlatformApp">
+            <div v-for="group in groups" :key="group.code" class="menu-group">
+              <div class="menu-group-label">
+                <el-icon><component :is="group.icon" /></el-icon>
+                <span>{{ group.label }}</span>
+              </div>
+              <router-link
+                v-for="object in group.objects"
+                :key="object.code"
+                :to="{ name: 'object', params: { code: object.code } }"
+                class="menu-item"
+                :class="{ active: currentCode() === object.code }"
+              >
+                <span class="dot" />
+                <span class="item-name">{{ object.name }}</span>
+                <span class="item-code mono">{{ object.code.split('.')[1] }}</span>
+              </router-link>
             </div>
-            <router-link
-              v-for="object in group.objects"
-              :key="object.code"
-              :to="{ name: 'object', params: { code: object.code } }"
-              class="menu-item"
-              :class="{ active: currentCode() === object.code }"
-            >
-              <span class="dot" />
-              <span class="item-name">{{ object.name }}</span>
-              <span class="item-code mono">{{ object.code.split('.')[1] }}</span>
-            </router-link>
-          </div>
-          <div v-if="catalog.state.loading" class="menu-hint">正在加载数据对象…</div>
-          <div v-else-if="catalog.state.error" class="menu-hint is-error">
-            {{ catalog.state.error }}
-          </div>
-          <div v-else-if="!groups.length" class="menu-hint">尚未配置数据对象</div>
+            <div v-if="catalog.state.loading" class="menu-hint">正在加载数据对象…</div>
+            <div v-else-if="catalog.state.error" class="menu-hint is-error">
+              {{ catalog.state.error }}
+            </div>
+            <div v-else-if="!groups.length" class="menu-hint">尚未配置数据对象</div>
+          </template>
         </nav>
 
         <nav v-else class="menu is-icon-only">
@@ -559,9 +605,16 @@ function onUserCommand(command: string): void {
                   <div class="muted">
                     {{ user?.tenantCode }} · 租户 #{{ user?.tenantId }} · 用户 #{{ user?.userId }}
                   </div>
+                  <div class="user-meta-app">
+                    当前入口：{{ isPlatformApp ? '平台管理' : '业务管理' }}
+                  </div>
                 </div>
               </el-dropdown-item>
-              <el-dropdown-item divided command="logout">
+              <el-dropdown-item divided command="switch-app">
+                <el-icon><Switch /></el-icon>
+                切换到{{ isPlatformApp ? '业务管理' : '平台管理' }}
+              </el-dropdown-item>
+              <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
                 退出登录
               </el-dropdown-item>
@@ -880,6 +933,8 @@ function onUserCommand(command: string): void {
   line-height: 1.5;
   padding: 2px 0;
 }
+
+.user-meta-app { margin-top: 4px; font-size: 11px; color: var(--brand-700); }
 
 .user-meta-name {
   color: var(--ink);

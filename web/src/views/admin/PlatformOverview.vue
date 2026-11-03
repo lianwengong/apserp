@@ -194,8 +194,8 @@ function open(path: string): void {
         <el-button text @click="open('/design?tab=field')">数据对象与字段</el-button>
         <el-button text @click="open('/design?tab=permission')">角色与权限</el-button>
         <el-button text @click="open('/design?tab=publish')">发布与回滚</el-button>
-        <el-button text @click="open('/workflow')">流程中心</el-button>
-        <el-button text @click="open('/todo')">我的待办</el-button>
+        <el-button text @click="open('/system/code-rules')">编号规则</el-button>
+        <el-button text @click="open('/system/terminals')">终端与功能</el-button>
       </div>
     </section>
   </div>

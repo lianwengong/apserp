@@ -5,6 +5,8 @@ import type { LoginResult } from '../api/types'
 
 const USER_KEY = 'aschain.user'
 const TENANT_KEY = 'aschain.tenant'
+/** 会话入口：1 平台管理 / 2 业务管理（刷新页面后仍要知道自己在哪个入口） */
+const APP_KEY = 'aschain.app'
 
 export interface SessionUser {
   userId: number
@@ -18,6 +20,8 @@ export interface SessionUser {
 interface SessionState {
   token: string | null
   user: SessionUser | null
+  /** 入口：1 平台管理 / 2 业务管理 */
+  appType: number
   /** /api/perm/me 是否已加载（刷新页面后需要重新拉一次） */
   loaded: boolean
 }
@@ -31,9 +35,14 @@ function readUser(): SessionUser | null {
   }
 }
 
+function readApp(): number {
+  return Number(localStorage.getItem(APP_KEY)) === 1 ? 1 : 2
+}
+
 const state = reactive<SessionState>({
   token: getToken(),
   user: readUser(),
+  appType: readApp(),
   loaded: false
 })
 
@@ -55,6 +64,8 @@ export const session = {
     setToken(result.token)
     state.token = result.token
     state.loaded = false
+    state.appType = result.appType === 1 ? 1 : 2
+    localStorage.setItem(APP_KEY, String(state.appType))
     localStorage.setItem(TENANT_KEY, tenantCode)
     persistUser({
       userId: result.userId,
@@ -79,6 +90,21 @@ export const session = {
       resources: result.resources
     })
     state.loaded = true
+  },
+
+  /** 当前入口：1 平台管理 / 2 业务管理 */
+  appType: computed(() => state.appType),
+
+  /** 切换入口需要重新登录：清会话并把目标入口带回登录页 */
+  switchApp(target: number): string {
+    const next = target === 1 ? 1 : 2
+    setToken(null)
+    state.token = null
+    state.loaded = false
+    state.appType = next
+    localStorage.setItem(APP_KEY, String(next))
+    persistUser(null)
+    return '/login?app=' + next
   },
 
   logout(): void {

@@ -52,13 +52,27 @@ public class MenuService {
             LEFT JOIN plat.[Module] md ON md.Id = m.ModuleId AND md.TenantId = m.TenantId
             WHERE m.TenantId = ?
               AND m.TerminalType = ?
+              AND m.AppType = ?
               AND m.IsDeleted = 0 AND m.IsEnabled = 1 AND m.IsVisible = 1
             ORDER BY m.Sort, m.Id
             """;
 
+    /** 按当前会话入口取菜单（入口来自 JWT，登录时选择）。 */
     public List<MenuNode> tree(int terminal) {
+        return tree(terminal, TenantContext.appType());
+    }
+
+    /**
+     * 按入口取菜单：1 平台管理 / 2 业务管理。
+     *
+     * <p>两个入口的菜单在库里就是分开的（{@code Menu.AppType}），所以这里不存在
+     * 「先查全树再剪枝」的问题；权限过滤仍在各自入口内进行。</p>
+     */
+    public List<MenuNode> tree(int terminal, int appType) {
         long tenantId = TenantContext.requireTenantId();
         int term = terminal < 1 || terminal > 6 ? 1 : terminal;
+        int app = appType == TenantContext.APP_PLATFORM ? TenantContext.APP_PLATFORM
+                : TenantContext.APP_BUSINESS;
         List<MenuRow> rows = jdbc.query(SQL_TREE,
                 (rs, i) -> new MenuRow(
                         rs.getLong("Id"),
@@ -69,15 +83,15 @@ public class MenuService {
                         rs.getString("Icon"),
                         rs.getInt("MenuType"),
                         rs.getString("ModuleCode")),
-                tenantId, term);
+                tenantId, term, app);
         List<MenuNode> all = buildTree(rows);
         if (TenantContext.isPlatformAdmin()) {
-            log.debug("menu_tree tenant={} terminal={} total={}", tenantId, term, count(all));
+            log.debug("menu_tree tenant={} terminal={} app={} total={}", tenantId, term, app, count(all));
             return all;
         }
         List<MenuNode> visible = filterTree(all, permissionService.grantedResources());
-        log.debug("menu_tree tenant={} terminal={} total={} visible={}",
-                tenantId, term, count(all), count(visible));
+        log.debug("menu_tree tenant={} terminal={} app={} total={} visible={}",
+                tenantId, term, app, count(all), count(visible));
         return visible;
     }
 

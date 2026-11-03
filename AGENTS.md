@@ -124,6 +124,7 @@ src/test/java/com/aschain/
 | 2026-11-02 | 取号方法加 `@Transactional` 后，8 线程并发取号出现死锁受害者（CannotAcquireLockException） | 取号只依赖单条 UPDATE 的原子性，**不要开事务**（否则行锁持有到方法返回，与插入路径互等）；死锁当正常并发结果退避重试 |
 | 2026-11-02 | PageSchema 只有本地定义，远程编辑要发版；前后端两份定义容易漂移 | 新增 plat.PageSchema + /api/page-schema/{code} + 管理端页面编排（/system/pages）；保存时以表单 code/title/kind 覆盖 JSON，服务端二次校验；前端 30s 缓存、保存主动失效、远程失败回退本地 |
 | 2026-11-02 | 开发机快照回滚后源码目录消失、`APSErpV3`/`APSErpV3_TEST` 变成「文件还在但库不在 sys.databases」的游离 .mdf；直接 CREATE 报「文件已存在」，ATTACH 又报「操作系统错误 5（拒绝访问）」（当前用户无 DATA 目录权限） | 源码从 Gitee 重新 clone（GitHub 当时 TCP 通但 clone 报 curl 52）；数据库改用临时名建库再 MODIFY NAME 改名成目标名（`tools/ci-db-reset.ps1` 已内置），绕开游离文件；迁移从空库重放 49 个版本即可恢复全部结构与种子 |
+| 2026-11-03 | 平台管理与业务管理挤在同一棵菜单树、同一个侧边栏，登录也不区分入口：平台配置项和日常业务混在一起，管理员和业务员看到一模一样的导航 | 菜单加 `AppType`（1 平台 / 2 业务）并把 90 子树整体归平台；登录必须选入口，令牌带 `app` 声明，菜单接口取令牌而非 query 参数；前端路由 `meta.app` 守卫，跨入口一律弹回本入口首页；切换入口=重新登录 |
 
 
 

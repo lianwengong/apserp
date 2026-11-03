@@ -52,7 +52,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             int tenantId = ((Number) claims.get(JwtService.CLAIM_TENANT)).intValue();
             boolean admin = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_ADMIN));
             boolean mustChange = Boolean.TRUE.equals(claims.get(JwtService.CLAIM_MUST_CHANGE));
-            TenantContext.set((long) tenantId, userId, admin);
+            // 入口从令牌来：老令牌没有 app 声明时按业务管理处理
+            Object appClaim = claims.get(JwtService.CLAIM_APP);
+            int appType = appClaim instanceof Number number
+                    ? number.intValue() : TenantContext.APP_BUSINESS;
+            TenantContext.set((long) tenantId, userId, admin, appType);
             request.setAttribute(ATTR_MUST_CHANGE, mustChange);
         } else if (allowHeaderAuth && request.getHeader("X-Tenant-Id") != null) {
             TenantContext.set(Long.valueOf(request.getHeader("X-Tenant-Id")),

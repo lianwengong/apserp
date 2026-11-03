@@ -13,6 +13,8 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const error = ref('')
+/** 入口：1 平台管理 / 2 业务管理 */
+const entrance = ref<number>(Number(route.query.app) === 1 ? 1 : 2)
 
 const form = reactive({
   tenantCode: session.lastTenantCode(),
@@ -39,12 +41,14 @@ async function submit(): Promise<void> {
     const result = await login({
       tenantCode: form.tenantCode.trim(),
       userName: form.userName.trim(),
-      password: form.password
+      password: form.password,
+      appType: entrance.value
     })
     session.setLogin(result, form.tenantCode.trim())
     await session.loadMe()
     await appearance.loadRemote()
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/'
+    const home = result.appType === 1 ? '/platform' : '/'
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : home
     await router.replace(redirect)
   } catch (ex) {
     error.value = ex instanceof Error ? ex.message : '登录失败，请稍后重试'
@@ -83,8 +87,29 @@ async function submit(): Promise<void> {
       <div class="form-card">
         <header class="form-head">
           <h2>登录</h2>
-          <p class="muted">使用租户账号进入系统</p>
+          <p class="muted">先选择入口，再使用租户账号进入</p>
         </header>
+
+        <div class="entrance-switch">
+          <button
+            type="button"
+            class="entrance-card"
+            :class="{ active: entrance === 1 }"
+            @click="entrance = 1"
+          >
+            <span class="entrance-title">平台管理</span>
+            <span class="entrance-hint">租户、组织、元数据、发布与监控</span>
+          </button>
+          <button
+            type="button"
+            class="entrance-card"
+            :class="{ active: entrance === 2 }"
+            @click="entrance = 2"
+          >
+            <span class="entrance-title">业务管理</span>
+            <span class="entrance-hint">主数据、采购、销售、库存等日常业务</span>
+          </button>
+        </div>
 
         <el-alert
           v-if="error"
@@ -132,7 +157,7 @@ async function submit(): Promise<void> {
           </el-form-item>
 
           <el-button type="primary" class="submit" :loading="loading" native-type="submit">
-            进入系统
+            进入{{ entrance === 1 ? '平台管理' : '业务管理' }}
           </el-button>
         </el-form>
 
@@ -146,6 +171,36 @@ async function submit(): Promise<void> {
 </template>
 
 <style scoped>
+.form-head h2 { margin: 0; font-size: 20px; }
+
+/* 入口选择：两张卡片，登录前先定身份 */
+.entrance-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 14px 0 18px;
+}
+.entrance-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+.entrance-card:hover { border-color: var(--brand-400); }
+.entrance-card.active {
+  border-color: var(--brand);
+  background: var(--brand-50);
+  box-shadow: inset 0 0 0 1px var(--brand);
+}
+.entrance-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.entrance-card.active .entrance-title { color: var(--brand-700); }
+.entrance-hint { font-size: 11px; color: var(--muted); line-height: 1.5; }
 .login {
   display: flex;
   min-height: 100%;

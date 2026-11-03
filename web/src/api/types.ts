@@ -14,6 +14,8 @@ export interface LoginResult {
   tenantId: number
   displayName: string
   mustChangePassword: boolean
+  /** 1 平台管理 / 2 业务管理 */
+  appType: number
 }
 
 export interface MeResult {

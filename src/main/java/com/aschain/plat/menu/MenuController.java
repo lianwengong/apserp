@@ -1,6 +1,7 @@
 package com.aschain.plat.menu;
 
 import com.aschain.common.ApiResult;
+import com.aschain.common.tenant.TenantContext;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -13,6 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
  * <pre>
  * GET /api/menu/tree?terminal=1   终端 1=PC，2=PDA，3=POS，4=移动，5=小程序，6=其他
  * </pre>
+ *
+ * <p>入口（平台管理 / 业务管理）取自登录令牌，不由前端传参决定——否则改个参数就能看到
+ * 另一侧的菜单，等于把两个入口的隔离做成摆设。</p>
  */
 @RestController
 @RequestMapping("/api/menu")
@@ -27,6 +31,6 @@ public class MenuController {
     @GetMapping("/tree")
     public ApiResult<List<MenuService.MenuNode>> tree(
             @RequestParam(defaultValue = "1") int terminal) {
-        return ApiResult.ok(menuService.tree(terminal));
+        return ApiResult.ok(menuService.tree(terminal, TenantContext.appType()));
     }
 }

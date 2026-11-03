@@ -2,6 +2,7 @@ package com.aschain.common.security;
 
 import com.aschain.common.ApiException;
 import com.aschain.common.ErrorCode;
+import com.aschain.common.tenant.TenantContext;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
@@ -29,6 +30,8 @@ public class JwtService {
     public static final String CLAIM_ADMIN = "adm";
     /** 首次登录未改密：除改密接口外一律拒绝。 */
     public static final String CLAIM_MUST_CHANGE = "mpwd";
+    /** 会话入口：1 平台管理 / 2 业务管理（登录时选择，菜单与首页按它过滤） */
+    public static final String CLAIM_APP = "app";
 
     private final SecretKey key;
     private final Duration ttl;
@@ -46,6 +49,12 @@ public class JwtService {
 
     public String issue(long userId, int tenantId, String userName, boolean platformAdmin,
                         boolean mustChangePassword) {
+        return issue(userId, tenantId, userName, platformAdmin, mustChangePassword,
+                TenantContext.APP_BUSINESS);
+    }
+
+    public String issue(long userId, int tenantId, String userName, boolean platformAdmin,
+                        boolean mustChangePassword, int appType) {
         Instant now = Instant.now();
         return Jwts.builder()
                 .subject(Long.toString(userId))
@@ -54,7 +63,8 @@ public class JwtService {
                         CLAIM_USER, userId,
                         CLAIM_NAME, userName,
                         CLAIM_ADMIN, platformAdmin,
-                        CLAIM_MUST_CHANGE, mustChangePassword))
+                        CLAIM_MUST_CHANGE, mustChangePassword,
+                        CLAIM_APP, appType))
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key)
