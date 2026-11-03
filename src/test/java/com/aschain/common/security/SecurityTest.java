@@ -65,7 +65,14 @@ class JwtServiceTest {
     @Test
     void tampered_token_should_be_rejected() {
         String token = jwt.issue(42L, 7, "admin", false, false);
-        String tampered = token.substring(0, token.length() - 2) + "xx";
+        // 必须改 payload 段：改签名段末尾字符有时会落在 base64 的填充位上，
+        // 解码后字节不变，令牌仍然合法——这个用例曾经因此偶发失败。
+        String[] parts = token.split("\\.");
+        String payload = parts[1];
+        int mid = payload.length() / 2;
+        char replacement = payload.charAt(mid) == 'A' ? 'B' : 'A';
+        String tampered = parts[0] + "." + payload.substring(0, mid) + replacement
+                + payload.substring(mid + 1) + "." + parts[2];
         assertThatThrownBy(() -> jwt.parse(tampered)).isInstanceOf(ApiException.class);
     }
 
