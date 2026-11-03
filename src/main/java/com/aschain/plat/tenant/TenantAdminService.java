@@ -367,7 +367,7 @@ public class TenantAdminService {
     }
 
     private void requirePlatformScope() {
-        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+        if (!TenantContext.isPlatformScope()) {
             throw new ApiException(ErrorCode.FORBIDDEN,
                     "仅平台管理员可开通/停用租户，请使用平台登录");
         }

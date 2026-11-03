@@ -1,6 +1,7 @@
 package com.aschain.plat.tenant;
 
 import com.aschain.common.ApiResult;
+import com.aschain.common.security.RequiresPermission;
 import java.util.Map;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
  * <p>都要求平台登录（平台作用域），租户管理员调用会 403。</p>
  */
 @RestController
+@RequiresPermission("PLAT:TENANT")
 @RequestMapping("/api/admin/tenants")
 public class AdminTenantController {
 

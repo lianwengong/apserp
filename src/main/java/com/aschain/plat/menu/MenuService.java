@@ -85,7 +85,9 @@ public class MenuService {
                         rs.getString("ModuleCode")),
                 tenantId, term, app);
         List<MenuNode> all = buildTree(rows);
-        if (TenantContext.isPlatformAdmin()) {
+        // 平台入口的菜单是平台控制台入口，权限在接口层按 PLAT:* 逐项校验；
+        // 这里不再按租户业务权限过滤，否则未授权的平台账号会看到空白侧边栏
+        if (TenantContext.isPlatformAdmin() || TenantContext.isPlatformApp()) {
             log.debug("menu_tree tenant={} terminal={} app={} total={}", tenantId, term, app, count(all));
             return all;
         }

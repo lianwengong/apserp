@@ -1,6 +1,7 @@
 package com.aschain.plat.admin;
 
 import com.aschain.common.ApiResult;
+import com.aschain.common.security.RequiresPermission;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 租户自己的账号在租户的用户管理里维护，不从这里进。</p>
  */
 @RestController
+@RequiresPermission("PLAT:ACCOUNT")
 @RequestMapping("/api/admin/users")
 public class PlatformUserController {
 

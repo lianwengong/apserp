@@ -152,9 +152,13 @@ public class AuthService {
                 throw new ApiException(ErrorCode.UNAUTHORIZED, "平台账号或口令不正确");
             }
             recordSuccess(user.id());
+            // 平台账号的 adm 声明由「是否持有 PLAT_ADMIN 角色」决定：
+            // 持有者直通所有平台接口；其余平台账号按 PLAT:* 权限点逐项判定
+            boolean platformFullAdmin = hasPlatformAdminRole(user.id());
             String token = jwtService.issue(user.id(), (int) user.tenantId(), user.userName(),
-                    true, user.mustChange(), TenantContext.APP_PLATFORM, true);
-            log.info("platform_login_ok homeTenant={} user={}", user.tenantId(), user.userName());
+                    platformFullAdmin, user.mustChange(), TenantContext.APP_PLATFORM, true);
+            log.info("platform_login_ok homeTenant={} user={} fullAdmin={}",
+                    user.tenantId(), user.userName(), platformFullAdmin);
             return new LoginResult(token, user.id(), (int) user.tenantId(), user.displayName(),
                     user.mustChange(), TenantContext.APP_PLATFORM);
         } finally {
@@ -298,6 +302,16 @@ public class AuthService {
                 user.admin(), false, TenantContext.appType(), TenantContext.isPlatformScope());
         return new LoginResult(token, user.id(), tenantId.intValue(), user.displayName(),
                 false, TenantContext.appType());
+    }
+
+    /** 平台账号是否持有 PLAT_ADMIN（全权角色）。 */
+    private boolean hasPlatformAdminRole(long userId) {
+        Integer count = jdbc.queryForObject("""
+                SELECT COUNT(*) FROM plat.UserRole ur
+                JOIN plat.Role r ON r.Id = ur.RoleId AND r.Code = 'PLAT_ADMIN'
+                WHERE ur.UserId = ? AND r.TenantId = 0 AND r.IsDeleted = 0 AND r.IsEnabled = 1
+                """, Integer.class, userId);
+        return count != null && count > 0;
     }
 
     static void validatePasswordPolicy(String raw) {

@@ -184,7 +184,7 @@ public class PlatformUserService {
     }
 
     private void requirePlatformScope() {
-        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+        if (!TenantContext.isPlatformScope()) {
             throw new ApiException(ErrorCode.FORBIDDEN,
                     "仅平台管理员可管理平台账号，请使用平台登录");
         }

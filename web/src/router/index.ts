@@ -17,6 +17,7 @@ import PlatformOverview from '../views/admin/PlatformOverview.vue'
 import TenantListView from '../views/admin/TenantListView.vue'
 import MenuOverviewView from '../views/admin/MenuOverviewView.vue'
 import PlatformUserView from '../views/admin/PlatformUserView.vue'
+import PlatformRoleView from '../views/admin/PlatformRoleView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { session } from '../stores/session'
@@ -106,6 +107,12 @@ const router = createRouter({
           name: 'platform-users',
           component: PlatformUserView,
           meta: { title: '用户与权限', cacheName: 'PlatformUserView', app: 1 }
+        },
+        {
+          path: 'admin/roles',
+          name: 'platform-roles',
+          component: PlatformRoleView,
+          meta: { title: '角色与权限', cacheName: 'PlatformRoleView', app: 1 }
         },
         {
           path: 'admin/menus',

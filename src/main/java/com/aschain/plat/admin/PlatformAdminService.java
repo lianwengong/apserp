@@ -74,7 +74,7 @@ public class PlatformAdminService {
      * 所有租户、跨租户操作，等于把租户隔离开了个后门。
      */
     private void requirePlatformAdmin() {
-        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+        if (!TenantContext.isPlatformScope()) {
             throw new ApiException(ErrorCode.FORBIDDEN,
                     "仅平台管理员可访问平台管理，请使用平台登录");
         }

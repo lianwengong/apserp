@@ -29,7 +29,7 @@ public class TenantProvisionService {
 
     public Map<String, Long> provision(int templateTenantId, int newTenantId) {
         // 开通租户是跨租户操作：必须来自平台登录（平台作用域），租户管理员不行
-        if (!TenantContext.isPlatformAdmin() || !TenantContext.isPlatformScope()) {
+        if (!TenantContext.isPlatformScope()) {
             throw new ApiException(ErrorCode.FORBIDDEN, "只有平台管理员可以开通租户，请使用平台登录");
         }
         if (templateTenantId == newTenantId) {
