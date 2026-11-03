@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, type Component } from 'vue'
+import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowDown,
@@ -11,6 +11,7 @@ import {
   Goods,
   Grid,
   HomeFilled,
+  Key,
   Money,
   Present,
   Search,
@@ -32,6 +33,8 @@ import type { TreeNavGroup } from '../components/treeNav'
 import { catalog } from '../stores/catalog'
 import { menus } from '../stores/menu'
 import NotificationBell from '../components/NotificationBell.vue'
+import { changeMyPassword } from '../api/auth'
+import { ElMessage } from 'element-plus'
 import { session } from '../stores/session'
 import { resetSessionCaches } from '../stores/reset'
 import { filterMenuTree, findMenuName } from '../utils/menu'
@@ -204,6 +207,11 @@ function openTreeNode(node: MenuNode): void {
 }
 
 onMounted(async () => {
+  // 首次登录未改密：后端会拦掉除改口令外的所有接口，这里直接强制弹窗，避免空白页
+  if (user.value?.mustChangePassword) {
+    openPasswordDialog(true)
+    return
+  }
   void catalog.load()
   void menus.load()
   // 刷新页面时已有登录态：把服务端偏好拉回来（登录页那条路径已经在登录成功后拉过）
@@ -368,9 +376,63 @@ const breadcrumb = computed<{ label: string; to?: string }[]>(() => {
 
 const user = computed(() => session.state.user)
 const userInitial = computed(() => {
-  const text = user.value?.displayName || user.value?.tenantCode || 'U'
+  const text = user.value?.displayName || user.value?.tenantName || user.value?.tenantCode || 'U'
   return text.slice(0, 1).toUpperCase()
 })
+
+// ---------------------------------------------------------------- 修改口令
+
+/** 首次登录未改密：弹窗不能关，只能改完继续 */
+const passwordDialog = reactive({
+  visible: false,
+  forced: false,
+  saving: false,
+  oldPassword: '',
+  newPassword: '',
+  confirm: '',
+  error: ''
+})
+
+const passwordValid = computed(
+  () =>
+    /^(?=.*[A-Za-z])(?=.*\d).{8,64}$/.test(passwordDialog.newPassword) &&
+    passwordDialog.newPassword === passwordDialog.confirm &&
+    passwordDialog.newPassword !== passwordDialog.oldPassword
+)
+
+function openPasswordDialog(forced = false): void {
+  passwordDialog.visible = true
+  passwordDialog.forced = forced
+  passwordDialog.oldPassword = ''
+  passwordDialog.newPassword = ''
+  passwordDialog.confirm = ''
+  passwordDialog.error = ''
+}
+
+async function submitPassword(): Promise<void> {
+  if (!passwordValid.value || passwordDialog.saving) return
+  passwordDialog.saving = true
+  passwordDialog.error = ''
+  try {
+    const result = await changeMyPassword({
+      oldPassword: passwordDialog.oldPassword,
+      newPassword: passwordDialog.newPassword
+    })
+    // 换发的新令牌不再带 mpwd=true，否则后续请求会一直被拦截器挡住
+    session.setLogin(result, session.state.user?.tenantCode ?? '')
+    await session.loadMe()
+    passwordDialog.visible = false
+    ElMessage.success('口令已修改')
+    // 改完口令要重新拉菜单（此前被「必须先改密」挡掉，菜单是空的）
+    resetSessionCaches()
+    void menus.load(true)
+    void catalog.load(true)
+  } catch (ex) {
+    passwordDialog.error = ex instanceof Error ? ex.message : '修改失败'
+  } finally {
+    passwordDialog.saving = false
+  }
+}
 
 function onUserCommand(command: string): void {
   if (command === 'logout') {
@@ -378,6 +440,9 @@ function onUserCommand(command: string): void {
     session.logout()
     resetSessionCaches()
     void router.replace({ name: 'login', query: { redirect } })
+  }
+  if (command === 'change-password') {
+    openPasswordDialog(user.value?.mustChangePassword ?? false)
   }
   if (command === 'switch-app') {
     // 切换入口必须重新登录：令牌里带着入口，不能只改前端状态
@@ -471,7 +536,7 @@ function onUserCommand(command: string): void {
           </div>
 
           <!-- 业务入口：业务菜单 + 数据对象 -->
-          <div v-if="!isPlatformApp" class="menu-group">
+          <div v-if="!isPlatformApp && !user?.mustChangePassword" class="menu-group">
             <div class="menu-group-label">
               <el-icon><Grid /></el-icon>
               <span>业务菜单</span>
@@ -502,7 +567,7 @@ function onUserCommand(command: string): void {
             </div>
           </div>
 
-          <template v-if="!isPlatformApp">
+          <template v-if="!isPlatformApp && !user?.mustChangePassword">
             <div v-for="group in groups" :key="group.code" class="menu-group">
               <div class="menu-group-label">
                 <el-icon><component :is="group.icon" /></el-icon>
@@ -585,9 +650,11 @@ function onUserCommand(command: string): void {
             灰度 v{{ metaVersion.version }}
           </el-tag>
         </el-tooltip>
-        <el-tag v-if="user" size="small" effect="plain" class="tenant-tag">
-          {{ user.tenantCode }}
-        </el-tag>
+        <el-tooltip v-if="user" :content="`租户编码 ${user.tenantCode}`" placement="bottom">
+          <el-tag size="small" effect="plain" class="tenant-tag">
+            {{ user.tenantName || user.tenantCode }}
+          </el-tag>
+        </el-tooltip>
 
         <el-tooltip content="外观与偏好" placement="bottom">
           <button type="button" class="icon-btn" aria-label="外观与偏好" @click="appearanceVisible = true">
@@ -609,16 +676,24 @@ function onUserCommand(command: string): void {
                 <div class="user-meta">
                   <div class="user-meta-name">{{ user?.displayName }}</div>
                   <div class="muted">
-                    {{ user?.tenantCode }} · 租户 #{{ user?.tenantId }} · 用户 #{{ user?.userId }}
+                    {{ user?.tenantName || user?.tenantCode }} · 用户 #{{ user?.userId }}
                   </div>
                   <div class="user-meta-app">
                     当前入口：{{ isPlatformApp ? '平台管理' : '业务管理' }}
                   </div>
                 </div>
               </el-dropdown-item>
-              <el-dropdown-item divided command="switch-app">
+              <el-dropdown-item divided command="change-password">
+                <el-icon><Key /></el-icon>
+                修改口令{{ user?.mustChangePassword ? '（首次登录必须修改）' : '' }}
+              </el-dropdown-item>
+              <el-dropdown-item v-if="isPlatformApp" command="switch-app">
                 <el-icon><Switch /></el-icon>
-                切换到{{ isPlatformApp ? '业务管理' : '平台管理' }}
+                切换到业务管理
+              </el-dropdown-item>
+              <el-dropdown-item v-else command="switch-app">
+                <el-icon><Switch /></el-icon>
+                切换到平台管理
               </el-dropdown-item>
               <el-dropdown-item command="logout">
                 <el-icon><SwitchButton /></el-icon>
@@ -674,10 +749,80 @@ function onUserCommand(command: string): void {
     </div>
 
     <AppearanceDrawer v-model="appearanceVisible" />
+
+    <el-dialog
+      v-model="passwordDialog.visible"
+      :title="passwordDialog.forced ? '首次登录必须先修改口令' : '修改口令'"
+      width="460px"
+      :close-on-click-modal="false"
+      :close-on-press-escape="!passwordDialog.forced"
+      :show-close="!passwordDialog.forced"
+      append-to-body
+    >
+      <el-alert
+        v-if="passwordDialog.forced"
+        type="warning"
+        :closable="false"
+        show-icon
+        title="为保证账号安全，初始口令必须修改后才能使用系统"
+        class="pwd-alert"
+      />
+      <el-form label-position="top" @submit.prevent="submitPassword">
+        <el-form-item label="原口令" required>
+          <el-input
+            v-model="passwordDialog.oldPassword"
+            type="password"
+            show-password
+            placeholder="请输入当前口令"
+          />
+        </el-form-item>
+        <el-form-item label="新口令" required>
+          <el-input
+            v-model="passwordDialog.newPassword"
+            type="password"
+            show-password
+            placeholder="8-64 位，必须同时包含字母与数字"
+          />
+        </el-form-item>
+        <el-form-item label="确认新口令" required>
+          <el-input
+            v-model="passwordDialog.confirm"
+            type="password"
+            show-password
+            placeholder="再输入一次新口令"
+            @keyup.enter="submitPassword"
+          />
+          <p v-if="passwordDialog.confirm && passwordDialog.newPassword !== passwordDialog.confirm" class="pwd-hint">
+            两次输入不一致
+          </p>
+        </el-form-item>
+      </el-form>
+      <el-alert v-if="passwordDialog.error" type="error" :title="passwordDialog.error" :closable="false" show-icon />
+      <template #footer>
+        <el-button v-if="!passwordDialog.forced" @click="passwordDialog.visible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :disabled="!passwordValid"
+          :loading="passwordDialog.saving"
+          @click="submitPassword"
+        >
+          确认修改
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <style scoped>
+.pwd-alert {
+  margin-bottom: 12px;
+}
+
+.pwd-hint {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  color: var(--el-color-danger);
+}
 .shell {
   display: flex;
   height: 100%;

@@ -34,6 +34,18 @@
 
 **入口不由前端参数决定**：菜单接口取令牌里的 `app`，否则改个 query 就能看到另一侧菜单，隔离等于没做。
 
+## 2.1 首次登录改口令
+
+开通/重置出来的管理员带 `MustChangePwd=1`，登录后：
+
+- 后端拦截器会拦掉除改口令外的所有接口（`ErrorCode.MUST_CHANGE_PASSWORD`）；
+- 前端识别 `mustChangePassword` 后弹**不可关闭**的改密框，改完自动换发令牌并重拉菜单；
+- 改口令走 `POST /api/me/password {oldPassword,newPassword}`：只认令牌身份，
+  不需要租户名/用户名，平台账号同样适用；
+- 日常改口令：用户菜单 →「修改口令」。
+
+顶栏的租户标签显示**租户名称**（`/api/perm/me` 返回 `tenantName`），悬停显示编码。
+
 ## 3. 菜单怎么分开
 
 `plat.Menu.AppType`（V51）：

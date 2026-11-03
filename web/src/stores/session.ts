@@ -12,8 +12,12 @@ export interface SessionUser {
   userId: number
   tenantId: number
   tenantCode: string
+  /** 租户名称：顶栏显示它，编码只在需要精确指代时出现 */
+  tenantName: string
   displayName: string
   platformAdmin: boolean
+  /** 首次登录未改密：前端据此强制弹改密框 */
+  mustChangePassword: boolean
   resources: string[]
 }
 
@@ -71,8 +75,10 @@ export const session = {
       userId: result.userId,
       tenantId: result.tenantId,
       tenantCode,
+      tenantName: '',
       displayName: result.displayName,
       platformAdmin: false,
+      mustChangePassword: result.mustChangePassword,
       resources: []
     })
   },
@@ -84,9 +90,11 @@ export const session = {
     persistUser({
       userId: result.userId,
       tenantId: result.tenantId,
-      tenantCode: base?.tenantCode ?? '',
+      tenantCode: result.tenantCode || base?.tenantCode || '',
+      tenantName: result.tenantName || base?.tenantName || '',
       displayName: base?.displayName ?? '',
       platformAdmin: result.platformAdmin,
+      mustChangePassword: base?.mustChangePassword ?? false,
       resources: result.resources
     })
     state.loaded = true

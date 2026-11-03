@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.aschain.common.ApiException;
+import com.aschain.common.security.JwtService;
+import com.aschain.common.security.PasswordHasher;
 import com.aschain.common.tenant.TenantContext;
 import com.aschain.support.ItDb;
+import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -39,6 +43,15 @@ class AuthLoginIT {
 
     @Autowired
     AuthService authService;
+
+    @Autowired
+    JwtService jwtService;
+
+    @Autowired
+    PasswordHasher hasher;
+
+    @Autowired
+    JdbcTemplate jdbc;
 
     @AfterEach
     void tearDown() {
@@ -68,5 +81,49 @@ class AuthLoginIT {
         assertThatThrownBy(() -> authService.login("NOPE", "admin", "AsChain@2026"))
                 .isInstanceOf(ApiException.class)
                 .hasMessageContaining("租户");
+    }
+
+    @Test
+    @DisplayName("首次登录未改密：用令牌上下文改口令，换发的令牌不再要求改密")
+    void change_password_for_current_user() {
+        String userName = "it_pwd_user";
+        String oldPassword = "Old@2026abc";
+        String newPassword = "New@2026abc";
+        TenantContext.set(1L, 1L, false);
+        jdbc.update("DELETE FROM plat.[User] WHERE TenantId = 1 AND UserName = ?", userName);
+        String salt = hasher.newSalt();
+        jdbc.update("""
+                INSERT plat.[User] (TenantId, UserName, PasswordHash, PasswordSalt, DisplayName,
+                                    UserType, IsEnabled, MustChangePwd, FailCount, IsDeleted, CreatedAt)
+                VALUES (1, ?, ?, ?, N'改密测试', 1, 1, 1, 0, 0, sysutcdatetime())
+                """, userName, hasher.hash(oldPassword, salt), salt);
+        Long userId = jdbc.queryForObject(
+                "SELECT Id FROM plat.[User] WHERE TenantId = 1 AND UserName = ?", Long.class, userName);
+        TenantContext.clear();
+
+        AuthService.LoginResult login = authService.login("T001", userName, oldPassword);
+        assertThat(login.mustChangePassword()).isTrue();
+
+        // 还原 JwtAuthFilter 写入的上下文（改口令只认令牌身份，不需要租户名）
+        Claims claims = jwtService.parse(login.token());
+        TenantContext.set(((Number) claims.get(JwtService.CLAIM_TENANT)).longValue(),
+                ((Number) claims.get(JwtService.CLAIM_USER)).longValue(),
+                Boolean.TRUE.equals(claims.get(JwtService.CLAIM_ADMIN)),
+                TenantContext.APP_BUSINESS,
+                Boolean.TRUE.equals(claims.get(JwtService.CLAIM_PLATFORM)));
+        AuthService.LoginResult changed = authService.changePasswordForCurrentUser(oldPassword, newPassword);
+        assertThat(changed.mustChangePassword()).isFalse();
+        assertThat(changed.userId()).isEqualTo(userId);
+        TenantContext.clear();
+
+        // 新口令可登录且不再要求改密；旧口令失效
+        AuthService.LoginResult after = authService.login("T001", userName, newPassword);
+        assertThat(after.mustChangePassword()).isFalse();
+        assertThatThrownBy(() -> authService.login("T001", userName, oldPassword))
+                .isInstanceOf(ApiException.class);
+
+        TenantContext.set(1L, 1L, false);
+        jdbc.update("DELETE FROM plat.[User] WHERE TenantId = 1 AND UserName = ?", userName);
+        TenantContext.clear();
     }
 }

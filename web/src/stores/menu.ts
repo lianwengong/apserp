@@ -33,6 +33,9 @@ export const menus = {
     const app = session.state.appType
     // 入口变了就必须重查：菜单是按入口在服务端过滤的
     if (!force && state.loaded && state.loadedApp === app) return
+    // 首次登录未改密时后端会拦掉菜单接口：这里静默跳过，
+    // 否则侧边栏会挂一条「首次登录必须先修改口令」的错误提示，看起来像系统坏了
+    if (session.state.user?.mustChangePassword) return
     if (state.loading) return
     state.loading = true
     state.error = ''

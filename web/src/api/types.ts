@@ -21,6 +21,8 @@ export interface LoginResult {
 export interface MeResult {
   userId: number
   tenantId: number
+  tenantCode: string
+  tenantName: string
   platformAdmin: boolean
   resources: string[]
   orgScope: number[]

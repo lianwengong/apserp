@@ -32,9 +32,10 @@ public class PermissionInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
-        // 首次登录未改密：除改密接口外一律拒绝，避免初始口令长期不换
+        // 首次登录未改密：除改口令接口外一律拒绝，避免初始口令长期不换
         if (Boolean.TRUE.equals(request.getAttribute(JwtAuthFilter.ATTR_MUST_CHANGE))
-                && !request.getRequestURI().startsWith("/api/auth/change-password")) {
+                && !request.getRequestURI().startsWith("/api/auth/change-password")
+                && !request.getRequestURI().startsWith("/api/me/password")) {
             throw new ApiException(ErrorCode.MUST_CHANGE_PASSWORD, "首次登录必须先修改口令");
         }
         if (!(handler instanceof HandlerMethod method)) {

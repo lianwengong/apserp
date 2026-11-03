@@ -22,3 +22,11 @@ export function platformLogin(payload: PlatformLoginPayload): Promise<LoginResul
 export function login(payload: LoginPayload): Promise<LoginResult> {
   return request<LoginResult>('/api/auth/login', { method: 'POST', body: payload })
 }
+
+/** 已登录用户改口令（不需要租户名，令牌里带身份）。首次登录强制改密也走这里。 */
+export function changeMyPassword(payload: {
+  oldPassword: string
+  newPassword: string
+}): Promise<LoginResult> {
+  return request<LoginResult>('/api/me/password', { method: 'POST', body: payload })
+}

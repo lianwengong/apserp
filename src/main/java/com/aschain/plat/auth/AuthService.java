@@ -54,6 +54,20 @@ public class AuthService {
             WHERE u.TenantId = ? AND u.UserName = ? AND u.IsDeleted = 0
             """;
 
+    /** 已登录用户按 Id 取自己（改口令用；租户由令牌上下文带入，走 RLS）。 */
+    private static final String SQL_USER_BY_ID = """
+            SELECT u.Id, u.UserName, u.PasswordHash, u.PasswordSalt, u.DisplayName,
+                   u.IsEnabled, u.LockedUntil, u.MustChangePwd, u.TenantId,
+                   u.IsPlatformAccount,
+                   CASE WHEN u.UserType = 1 AND EXISTS (
+                       SELECT 1 FROM plat.UserRole ur
+                       JOIN plat.Role r ON r.Id = ur.RoleId
+                       WHERE ur.UserId = u.Id AND r.Code = 'SYSADMIN' AND r.IsEnabled = 1
+                   ) THEN 1 ELSE 0 END AS IsAdmin
+            FROM plat.[User] u
+            WHERE u.Id = ? AND u.IsDeleted = 0
+            """;
+
     /**
      * 平台登录：没有租户名，按「平台账号」标记跨租户找人。
      * 运行时依赖平台作用域把 RLS 放开，否则 plat.User 是 fail-closed 空的。
@@ -249,6 +263,41 @@ public class AuthService {
         }
         // 旧令牌仍带 mpwd=true，必须换发
         return login(tenantCode, userName, newPassword, appType);
+    }
+
+    /**
+     * 已登录用户改口令：不依赖租户名/用户名，直接用令牌里的上下文。
+     *
+     * <p>首次登录未改密时，拦截器只放行这一个入口（{@code /api/me/password}），
+     * 所以它必须在「没有租户名」的情况下也能工作——平台账号同样适用。</p>
+     */
+    public LoginResult changePasswordForCurrentUser(String oldPassword, String newPassword) {
+        Long tenantId = TenantContext.tenantId();
+        Long userId = TenantContext.userId();
+        if (tenantId == null || userId == null) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED, "未登录或登录已失效");
+        }
+        validatePasswordPolicy(newPassword);
+        if (oldPassword == null || oldPassword.equals(newPassword)) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "新口令不能与旧口令相同");
+        }
+        List<UserRow> rows = jdbc.query(SQL_USER_BY_ID, (rs, i) -> mapUser(rs), userId);
+        if (rows.isEmpty()) {
+            throw new ApiException(ErrorCode.UNAUTHORIZED, "账号不存在");
+        }
+        UserRow user = rows.get(0);
+        if (!hasher.matches(oldPassword, user.hash(), user.salt())) {
+            throw new ApiException(ErrorCode.BAD_REQUEST, "原口令不正确");
+        }
+        String salt = hasher.newSalt();
+        String hash = hasher.hash(newPassword, salt);
+        jdbc.update(SQL_CHANGE_PWD, hash, salt, userId);
+        log.info("password_changed_self tenant={} user={}", tenantId, user.userName());
+        // 换发令牌：旧令牌仍带 mpwd=true，会一直被拦截器挡住
+        String token = jwtService.issue(user.id(), tenantId.intValue(), user.userName(),
+                user.admin(), false, TenantContext.appType(), TenantContext.isPlatformScope());
+        return new LoginResult(token, user.id(), tenantId.intValue(), user.displayName(),
+                false, TenantContext.appType());
     }
 
     static void validatePasswordPolicy(String raw) {

@@ -2,6 +2,7 @@ package com.aschain.plat.perm;
 
 import com.aschain.common.ApiResult;
 import com.aschain.common.tenant.TenantContext;
+import com.aschain.plat.tenant.TenantQueryService;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -17,20 +18,27 @@ import org.springframework.web.bind.annotation.RestController;
 public class PermissionController {
 
     private final PermissionService permissionService;
+    private final TenantQueryService tenantQuery;
 
-    public PermissionController(PermissionService permissionService) {
+    public PermissionController(PermissionService permissionService,
+                                TenantQueryService tenantQuery) {
         this.permissionService = permissionService;
+        this.tenantQuery = tenantQuery;
     }
 
-    public record MeResult(long userId, long tenantId, boolean platformAdmin,
-                           Set<String> resources, List<Integer> orgScope) {
+    public record MeResult(long userId, long tenantId, String tenantCode, String tenantName,
+                           boolean platformAdmin, Set<String> resources, List<Integer> orgScope) {
     }
 
     @GetMapping("/me")
     public ApiResult<MeResult> me() {
+        long tenantId = TenantContext.tenantId() == null ? 0 : TenantContext.tenantId();
+        var tenant = tenantQuery.summary(tenantId);
         return ApiResult.ok(new MeResult(
                 TenantContext.userId() == null ? 0 : TenantContext.userId(),
-                TenantContext.tenantId() == null ? 0 : TenantContext.tenantId(),
+                tenantId,
+                tenant.code(),
+                tenant.name(),
                 TenantContext.isPlatformAdmin(),
                 permissionService.grantedResources(),
                 permissionService.orgScope()));

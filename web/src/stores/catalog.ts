@@ -1,6 +1,7 @@
 import { reactive } from 'vue'
 import { listObjects } from '../api/meta'
 import type { DataObjectDto } from '../api/types'
+import { session } from './session'
 
 /**
  * 数据对象目录：侧边栏菜单、工作台卡片、面包屑都从这里取。
@@ -22,6 +23,8 @@ export const catalog = {
   async load(force = false): Promise<void> {
     if (state.loading) return
     if (state.loaded && !force) return
+    // 首次登录未改密时接口会被拦，静默跳过，避免侧边栏冒红色错误提示
+    if (session.state.user?.mustChangePassword) return
     state.loading = true
     state.error = ''
     try {
