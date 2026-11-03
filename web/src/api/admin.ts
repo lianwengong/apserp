@@ -16,6 +16,39 @@ export function listTenants(): Promise<TenantDto[]> {
   return request<TenantDto[]>('/api/admin/tenants')
 }
 
+export interface TenantCreateBody {
+  code: string
+  name: string
+  shortName?: string | null
+  industry?: string | null
+  templateTenantId?: number | null
+  adminUserName: string
+  adminPassword: string
+  expireAt?: string | null
+}
+
+export interface TenantCreateResult {
+  tenantId: number
+  code: string
+  name: string
+  adminUserName: string
+  /** 克隆到的行数：Menu / Module / Permission / Role / DataObject … */
+  provisioned: Record<string, number>
+}
+
+/** 开通租户：建租户 + 克隆模板元数据 + 建租户管理员（仅平台登录）。 */
+export function createTenant(body: TenantCreateBody): Promise<TenantCreateResult> {
+  return request<TenantCreateResult>('/api/admin/tenants', { method: 'POST', body })
+}
+
+/** 停用 / 启用租户（仅平台登录）。 */
+export function setTenantEnabled(tenantId: number, enabled: boolean): Promise<void> {
+  return request<void>(`/api/admin/tenants/${tenantId}/enabled`, {
+    method: 'PUT',
+    body: { enabled }
+  })
+}
+
 /** 系统功能模块管理（模块 → 功能点 → 动作链） */
 export const moduleAdminApi = {
   overview: () => request<Record<string, number>>('/api/admin/modules/overview'),
