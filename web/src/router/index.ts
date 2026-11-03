@@ -16,6 +16,7 @@ import MenuPlaceholder from '../views/MenuPlaceholder.vue'
 import PlatformOverview from '../views/admin/PlatformOverview.vue'
 import TenantListView from '../views/admin/TenantListView.vue'
 import MenuOverviewView from '../views/admin/MenuOverviewView.vue'
+import PlatformUserView from '../views/admin/PlatformUserView.vue'
 import ForbiddenView from '../views/ForbiddenView.vue'
 import NotFoundView from '../views/NotFoundView.vue'
 import { session } from '../stores/session'
@@ -99,6 +100,12 @@ const router = createRouter({
           name: 'platform-tenants',
           component: TenantListView,
           meta: { title: '租户管理', cacheName: 'TenantListView', app: 1 }
+        },
+        {
+          path: 'admin/users',
+          name: 'platform-users',
+          component: PlatformUserView,
+          meta: { title: '用户与权限', cacheName: 'PlatformUserView', app: 1 }
         },
         {
           path: 'admin/menus',

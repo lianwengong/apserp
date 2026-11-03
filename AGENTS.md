@@ -128,6 +128,7 @@ src/test/java/com/aschain/
 | 2026-11-03 | 「租户管理员」被当成「平台管理员」：`/api/admin/**` 只校验 `isPlatformAdmin()`（= 本租户 SYSADMIN），结果任何一个租户的管理员都能列出所有租户 | 平台接口必须同时满足 `isPlatformScope()`，而 `pf` 声明只有「无租户名的平台登录」才会签发；租户登录的令牌永远不带 `pf`，跨租户接口稳定 403 |
 | 2026-11-03 | 登录进来侧边栏「少一截」，刷新一下才对（平台/业务入口都有）：`stores/menu.ts`、`stores/catalog.ts` 是模块级单例，`loaded=true` 后 `load()` 直接 return，退出再登录/换入口时复用了上一个会话的树 | 单例缓存必须带「属于谁」的标记：菜单记 `loadedApp`，入口变了强制重查；登录、退出、切入口统一走 `resetSessionCaches()` 清空。E2E 覆盖「租户→平台→租户」不刷新也必须完整 |
 | 2026-11-03 | 开通新租户后「没人能登录」：`usp_Tenant_Provision` 只克隆元数据（模块/菜单/权限/角色…），**不复制用户**；只建租户行等于交付一个空壳 | 开通必须三步同事务：建租户行 → 克隆元数据 → 建租户管理员（绑定**克隆出来的** SYSADMIN 角色，MustChangePwd=1）。用户必须在克隆之后建，否则角色 Id 对不上 |
+| 2026-11-03 | 定时任务里查租户/用户永远查不到：后台线程没有请求上下文，RLS fail-closed 把表挡成空集，任务「跑成功但什么都没做」 | 任务内自己 `TenantContext.set(null,null,false,APP_PLATFORM,true)` 打开平台作用域，finally 恢复；到期扫描还必须给平台账号发站内通知，否则停用了没人知道 |
 
 
 
